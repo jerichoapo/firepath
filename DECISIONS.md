@@ -133,3 +133,16 @@ cannot draw money that doesn't exist).
 Text/number fields and the scenario rename commit to state on every keystroke (debounced
 400 ms into IndexedDB). Blur-only commits lose edits when focus never lands (automation,
 some keyboard flows) and add a stale-value class of bugs for zero benefit at this scale.
+
+## D19. Plan validity gates the verdict; debts are rejected, not modeled
+A plan with no retirement spending has an FI number of $0, which makes "FI reached",
+"Coast FIRE", and "100% success" trivially true — so `fiNumber ≤ 0` marks the plan
+*incomplete* and the header/simulation views show "—" plus a "finish setup" prompt instead
+of a verdict. Cross-field contradictions (life expectancy ≤ current age, income streams
+ending before they start, negative balances or basis) are *invalid*: flagged inline and
+non-blocking, per src/engine/validate.ts. Numeric fields clamp to their min/max on
+blur/Enter — never mid-keystroke, preserving D18's commit-on-change — so partial numbers
+don't jump while typing. Negative balances are clamped to $0 rather than accepted: debt
+modeling would change withdrawal math and net-worth semantics, and half-supporting it is
+worse than not supporting it. UI dismissals (demo banner, orientation card) persist in the
+Dexie meta table as device-local flags, deliberately excluded from JSON export/import.

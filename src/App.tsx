@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Header } from './components/Header';
+import { Btn } from './components/ui';
 import { loadStore, type StoreState } from './store/db';
-import { PlanProvider } from './store/PlanContext';
+import { NavProvider, useNav, type TabId } from './store/NavContext';
+import { PlanProvider, usePlanStore } from './store/PlanContext';
 import { SimProvider } from './store/SimContext';
 import { BacktestView } from './views/BacktestView';
 import { CompareView } from './views/CompareView';
@@ -11,7 +13,7 @@ import { ProjectionView } from './views/ProjectionView';
 import { SankeyView } from './views/SankeyView';
 import { TimelineView } from './views/TimelineView';
 
-const TABS = [
+const TABS: { id: TabId; label: string; view: () => JSX.Element }[] = [
   { id: 'plan', label: 'Plan', view: PlanView },
   { id: 'projection', label: 'Projection', view: ProjectionView },
   { id: 'montecarlo', label: 'Monte Carlo', view: MonteCarloView },
@@ -19,12 +21,10 @@ const TABS = [
   { id: 'compare', label: 'Scenarios', view: CompareView },
   { id: 'timeline', label: 'Timeline', view: TimelineView },
   { id: 'cashflow', label: 'Cash Flow', view: SankeyView },
-] as const;
-type TabId = (typeof TABS)[number]['id'];
+];
 
 export default function App() {
   const [store, setStore] = useState<StoreState | null>(null);
-  const [tab, setTab] = useState<TabId>('plan');
   useEffect(() => {
     void loadStore().then(setStore);
   }, []);
@@ -33,36 +33,70 @@ export default function App() {
     return <div className="grid h-screen place-items-center text-sm text-[var(--c-muted)]">Loading your plans…</div>;
   }
 
-  const View = TABS.find((t) => t.id === tab)!.view;
   return (
     <PlanProvider initial={store}>
       <SimProvider>
-        <Header />
-        <nav className="sticky top-[49px] z-10 border-b border-[var(--c-border)] bg-[var(--c-page)]/95 backdrop-blur">
-          <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTab(t.id)}
-                className={`whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-medium transition-colors ${
-                  tab === t.id
-                    ? 'border-[var(--c-accent)] text-[var(--c-accent)]'
-                    : 'border-transparent text-[var(--c-ink-2)] hover:text-[var(--c-ink)]'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </nav>
-        <main className="mx-auto max-w-7xl px-4 py-4">
-          <View />
-        </main>
-        <footer className="mx-auto max-w-7xl px-4 pb-6 pt-2 text-[11px] text-[var(--c-muted)]">
-          FirePath is a local-only educational modeling tool, not financial advice. All data stays in your browser.
-        </footer>
+        <NavProvider>
+          <Shell />
+        </NavProvider>
       </SimProvider>
     </PlanProvider>
+  );
+}
+
+function Shell() {
+  const { tab, setTab } = useNav();
+  const View = TABS.find((t) => t.id === tab)!.view;
+  return (
+    <>
+      <Header />
+      <nav className="sticky top-[49px] z-10 border-b border-[var(--c-border)] bg-[var(--c-page)]/95 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-medium transition-colors ${
+                tab === t.id
+                  ? 'border-[var(--c-accent)] text-[var(--c-accent)]'
+                  : 'border-transparent text-[var(--c-ink-2)] hover:text-[var(--c-ink)]'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </nav>
+      <DemoBanner />
+      <main className="mx-auto max-w-7xl px-4 py-4">
+        <View />
+      </main>
+      <footer className="mx-auto max-w-7xl px-4 pb-6 pt-2 text-[11px] text-[var(--c-muted)]">
+        FirePath is a local-only educational modeling tool, not financial advice. All data stays in your browser.
+      </footer>
+    </>
+  );
+}
+
+/** First-run notice that the seeded numbers are a demo, not the user's (F2). */
+function DemoBanner() {
+  const store = usePlanStore();
+  if (store.flags.demoBannerDismissed || store.active.name !== 'Demo Plan') return null;
+  return (
+    <div className="border-b border-[var(--c-border)] bg-[var(--c-accent)]/8">
+      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-3 gap-y-2 px-4 py-2 text-xs">
+        <p className="min-w-52 flex-1">
+          👋 <b>This is a demo household</b> so you can explore every feature. Replace the
+          numbers with yours on the Plan tab — or wipe it and start from scratch.
+        </p>
+        <Btn onClick={() => { store.resetToBlank(); store.setFlag('demoBannerDismissed'); }}>
+          Start blank
+        </Btn>
+        <Btn variant="primary" onClick={() => store.setFlag('demoBannerDismissed')}>
+          Explore the demo
+        </Btn>
+      </div>
+    </div>
   );
 }

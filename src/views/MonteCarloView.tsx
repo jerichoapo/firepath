@@ -8,7 +8,7 @@ import {
 import { MC_MAX_RUNS, MC_MIN_RUNS, quantileOfSorted, type McResult } from '../engine/montecarlo';
 import { fmtCompact, fmtPct, fmtUSD } from '../lib/format';
 import { axisProps, gridProps, moneyAxis } from '../components/charts/chartTheme';
-import { Card, NumField, Segmented } from '../components/ui';
+import { Card, Empty, NumField, Segmented } from '../components/ui';
 import { usePlanStore } from '../store/PlanContext';
 import { useSim } from '../store/SimContext';
 
@@ -101,7 +101,15 @@ function OutcomeHistogram({ finals }: { finals: number[] }) {
 
 export function MonteCarloView() {
   const { plan, update } = usePlanStore();
-  const { mc, mcProgress } = useSim();
+  const { mc, mcProgress, incomplete } = useSim();
+
+  if (incomplete) {
+    return (
+      <Card title="Monte Carlo">
+        <Empty>Finish your plan first — add annual spending on the Plan tab, and simulations run automatically.</Empty>
+      </Card>
+    );
+  }
 
   return (
     <div className="grid grid-cols-1 gap-4">

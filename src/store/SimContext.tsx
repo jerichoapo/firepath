@@ -12,6 +12,7 @@ import type { McResult } from '../engine/montecarlo';
 import { project } from '../engine/projection';
 import { fixedReturns } from '../engine/returns';
 import type { PlanInput, ProjectionResult, Scenario } from '../engine/types';
+import { isIncomplete, planIssues, type PlanIssue } from '../engine/validate';
 import type { SimRequest, SimResponse } from '../workers/sim.worker';
 import { usePlanStore } from './PlanContext';
 
@@ -44,6 +45,10 @@ export interface SimState {
   coastAgeVal: number | null;
   netWorthNow: number;
   milestones: Milestone[];
+  /** Validity problems with the current plan (see engine/validate.ts). */
+  issues: PlanIssue[];
+  /** True when FI/success metrics would be vacuous — the UI shows "—" instead. */
+  incomplete: boolean;
   mc: McResult | null;
   mcProgress: number;
   backtest: BacktestResult | null;
@@ -57,6 +62,7 @@ export function SimProvider({ children }: { children: ReactNode }) {
 
   const deterministic = useMemo(() => {
     const proj = project(plan, fixedReturns(plan.assumptions.expReturn));
+    const issues = planIssues(plan);
     return {
       proj,
       fiN: fiNumber(plan),
@@ -65,6 +71,8 @@ export function SimProvider({ children }: { children: ReactNode }) {
       coastAgeVal: coastFireAge(plan, proj),
       netWorthNow: currentNetWorth(plan),
       milestones: allMilestones(plan, proj),
+      issues,
+      incomplete: isIncomplete(issues),
     };
   }, [plan]);
 

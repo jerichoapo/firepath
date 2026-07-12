@@ -17,7 +17,7 @@ test('first run seeds the demo household and shows headline metrics', async ({ f
   for (const label of ['Net worth today', 'FI number', 'Projected FI', 'Success']) {
     await expect(page.getByRole('banner').getByText(label, { exact: true })).toBeVisible();
   }
-  await expect(page.locator('select[aria-label="Active scenario"] option')).toHaveText(['Base Plan']);
+  await expect(page.locator('select[aria-label="Active scenario"] option')).toHaveText(['Demo Plan']);
   // Real dollar figures, not placeholders — and Monte Carlo completes in the header.
   await expect(headerMetric(page, 'Net worth today')).toHaveText(/^\$/);
   await expect(headerMetric(page, 'Success')).toHaveText(/^[\d.]+%$/, { timeout: 20_000 });

@@ -23,16 +23,13 @@ export async function wipeDb(page: Page): Promise<void> {
 /** Navigate to the app and wait until it has loaded past the store-loading screen. */
 export async function loadApp(page: Page): Promise<void> {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'FirePath' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'FirePath', exact: true })).toBeVisible();
 }
 
 interface AppFixtures {
-  /** First run: database wiped, app loads and seeds the demo household. */
+  /** First run: database wiped, app loads and seeds the demo household (banners visible). */
   freshApp: Page;
-  /**
-   * Demo data present and ready to use. Identical to freshApp today; diverges in
-   * Phase 1 (freshApp = first-run banners visible, seedApp = banners dismissed).
-   */
+  /** Demo data present, first-run banners dismissed — a "settled" app. */
   seedApp: Page;
   /** A blank scenario is active, created through the UI the way a user would. */
   blankApp: Page;
@@ -45,6 +42,8 @@ export const test = base.extend<AppFixtures>({
     await use(page);
   },
   seedApp: async ({ freshApp }, use) => {
+    await freshApp.getByRole('button', { name: 'Explore the demo' }).click();
+    await freshApp.getByRole('button', { name: '✕ Got it' }).click();
     await use(freshApp);
   },
   blankApp: async ({ freshApp }, use) => {
@@ -64,6 +63,45 @@ export function activeScenarioName(page: Page) {
  *  Scoped to the banner — labels like "FI number" also appear inside views. */
 export function headerMetric(page: Page, label: string) {
   return page.getByRole('banner').getByText(label, { exact: true }).locator('xpath=following-sibling::p');
+}
+
+/** Wait until a UI flag (banner dismissal) has actually been persisted to IndexedDB —
+ *  saves are debounced 400 ms, so reload-persistence tests must not race them. */
+export async function waitForFlag(page: Page, key: string): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          (k) =>
+            new Promise<boolean>((resolve) => {
+              const open = indexedDB.open('firepath');
+              open.onsuccess = () => {
+                const db = open.result;
+                const get = db.transaction('meta', 'readonly').objectStore('meta').get('uiFlags');
+                get.onsuccess = () => {
+                  db.close();
+                  try {
+                    const row = get.result as { value?: string } | undefined;
+                    resolve(Boolean((JSON.parse(row?.value ?? '{}') as Record<string, boolean>)[k]));
+                  } catch {
+                    resolve(false);
+                  }
+                };
+                get.onerror = () => { db.close(); resolve(false); };
+              };
+              open.onerror = () => resolve(false);
+            }),
+          key,
+        ),
+      { timeout: 5_000 },
+    )
+    .toBe(true);
+}
+
+/** Reload and wait for the app to be interactive again. */
+export async function reloadApp(page: Page): Promise<void> {
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'FirePath', exact: true })).toBeVisible();
 }
 
 export { expect };

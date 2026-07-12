@@ -13,7 +13,8 @@ type Action =
   | { type: 'duplicate'; id: string }
   | { type: 'rename'; id: string; name: string }
   | { type: 'delete'; id: string }
-  | { type: 'replaceAll'; state: StoreState };
+  | { type: 'flag'; key: string }
+  | { type: 'replaceAll'; state: Pick<StoreState, 'scenarios' | 'activeId'> };
 
 function reducer(state: StoreState, action: Action): StoreState {
   switch (action.type) {
@@ -29,12 +30,12 @@ function reducer(state: StoreState, action: Action): StoreState {
         ),
       };
     case 'add':
-      return { scenarios: [...state.scenarios, action.scenario], activeId: action.scenario.id };
+      return { ...state, scenarios: [...state.scenarios, action.scenario], activeId: action.scenario.id };
     case 'duplicate': {
       const src = state.scenarios.find((s) => s.id === action.id);
       if (!src) return state;
       const copy = makeScenario(`${src.name} (copy)`, structuredClone(src.plan));
-      return { scenarios: [...state.scenarios, copy], activeId: copy.id };
+      return { ...state, scenarios: [...state.scenarios, copy], activeId: copy.id };
     }
     case 'rename':
       return {
@@ -47,15 +48,19 @@ function reducer(state: StoreState, action: Action): StoreState {
       const remaining = state.scenarios.filter((s) => s.id !== action.id);
       if (remaining.length === 0) {
         const fresh = makeScenario('Blank Plan', blankPlan(new Date().getFullYear()));
-        return { scenarios: [fresh], activeId: fresh.id };
+        return { ...state, scenarios: [fresh], activeId: fresh.id };
       }
       return {
+        ...state,
         scenarios: remaining,
         activeId: state.activeId === action.id ? remaining[0].id : state.activeId,
       };
     }
+    case 'flag':
+      return { ...state, flags: { ...state.flags, [action.key]: true } };
     case 'replaceAll':
-      return action.state;
+      // Partial by design: flags are device-local and survive imports/resets.
+      return { ...state, ...action.state };
   }
 }
 
@@ -63,9 +68,12 @@ export interface PlanStore {
   scenarios: Scenario[];
   active: Scenario;
   plan: PlanInput;
+  /** One-time UI dismissals; set via setFlag, persisted with the store. */
+  flags: Record<string, boolean>;
   dispatch: (a: Action) => void;
   /** Convenience: immutable patch of the active plan. */
   update: (fn: (plan: PlanInput) => PlanInput) => void;
+  setFlag: (key: string) => void;
   exportJson: () => string;
   importJson: (text: string) => string | null;
   resetToSeed: () => void;
@@ -96,10 +104,22 @@ export function PlanProvider({ initial, children }: { initial: StoreState; child
       scenarios: state.scenarios,
       active,
       plan: active.plan,
+      flags: state.flags,
       dispatch,
       update,
+      setFlag: (key: string) => dispatch({ type: 'flag', key }),
       exportJson: () =>
-        JSON.stringify({ app: 'firepath', version: 1, exportedAt: new Date().toISOString(), ...state }, null, 2),
+        JSON.stringify(
+          {
+            app: 'firepath',
+            version: 1,
+            exportedAt: new Date().toISOString(),
+            scenarios: state.scenarios,
+            activeId: state.activeId,
+          },
+          null,
+          2,
+        ),
       importJson: (text) => {
         try {
           const data = JSON.parse(text) as { app?: string; scenarios?: Scenario[]; activeId?: string };
@@ -130,7 +150,7 @@ export function PlanProvider({ initial, children }: { initial: StoreState; child
         }
       },
       resetToSeed: () => {
-        const seed = makeScenario('Base Plan', seedPlan(new Date().getFullYear()));
+        const seed = makeScenario('Demo Plan', seedPlan(new Date().getFullYear()));
         dispatch({ type: 'replaceAll', state: { scenarios: [seed], activeId: seed.id } });
       },
       resetToBlank: () => {

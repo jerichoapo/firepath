@@ -6,11 +6,19 @@ import {
 import type { BacktestStart } from '../engine/backtest';
 import { fmtCompact, fmtPct, fmtUSD } from '../lib/format';
 import { axisProps, gridProps, moneyAxis } from '../components/charts/chartTheme';
-import { Card } from '../components/ui';
+import { Card, Empty } from '../components/ui';
 import { useSim } from '../store/SimContext';
 
 export function BacktestView() {
-  const { plan, backtest } = useSim();
+  const { plan, backtest, incomplete } = useSim();
+
+  if (incomplete) {
+    return (
+      <Card title="Historical backtest">
+        <Empty>Finish your plan first — add annual spending on the Plan tab, and the backtest runs automatically.</Empty>
+      </Card>
+    );
+  }
 
   if (!backtest) {
     return <Card title="Historical backtest"><p className="text-sm text-[var(--c-muted)]">Replaying history…</p></Card>;

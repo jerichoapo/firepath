@@ -9,6 +9,7 @@ import { bracketTax, federalTax, ltcgTax, payrollTax } from './tax';
 import { FEDERAL_2026 } from './taxConfig';
 import { blankPlan, seedPlan } from './seed';
 import type { PlanInput } from './types';
+import { isIncomplete, planIssues } from './validate';
 
 const START_YEAR = 2026;
 
@@ -254,5 +255,43 @@ describe('backtest', () => {
       expect(h.bond).toBeGreaterThan(-0.4);
       expect(h.bond).toBeLessThan(0.5);
     }
+  });
+});
+
+describe('plan validity', () => {
+  it('flags a blank plan as incomplete (FI metrics would be vacuous)', () => {
+    const issues = planIssues(blankPlan(START_YEAR));
+    expect(issues.map((i) => i.code)).toEqual(['no-spending']);
+    expect(isIncomplete(issues)).toBe(true);
+  });
+
+  it('accepts the demo plan without issues', () => {
+    expect(planIssues(seedPlan(START_YEAR))).toEqual([]);
+  });
+
+  it('rejects a life expectancy at or below current age', () => {
+    const p = bare();
+    p.expenses.currentAnnual = 40_000; // complete, so only the invalid issue fires
+    p.profile.lifeExpectancy = p.profile.currentAge;
+    const issues = planIssues(p);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ level: 'invalid', code: 'life-expectancy' });
+  });
+
+  it('flags income streams that end before they start, by id', () => {
+    const p = bare();
+    p.expenses.currentAnnual = 40_000;
+    p.incomes = [{ id: 'x1', name: 'Backwards', kind: 'w2', annual: 10_000, startAge: 50, endAge: 45, growth: 0 }];
+    const issues = planIssues(p);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]).toMatchObject({ level: 'invalid', code: 'stream-ages', streamId: 'x1' });
+  });
+
+  it('rejects negative balances and negative basis', () => {
+    const p = bare();
+    p.expenses.currentAnnual = 40_000;
+    p.accounts.taxable.balance = -50_000;
+    p.rothBasis = -1;
+    expect(planIssues(p).map((i) => i.code)).toEqual(['negative-balance', 'negative-balance']);
   });
 });

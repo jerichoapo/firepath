@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { blankPlan } from '../engine/seed';
 import { makeScenario } from '../engine/seed';
 import { fmtCompact, fmtPct } from '../lib/format';
+import { useNav } from '../store/NavContext';
 import { usePlanStore } from '../store/PlanContext';
 import { useSim } from '../store/SimContext';
 import { Btn } from './ui';
@@ -21,8 +22,11 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: '
 export function Header() {
   const store = usePlanStore();
   const sim = useSim();
+  const { setTab } = useNav();
   const file = useRef<HTMLInputElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  // An incomplete plan (no retirement spending) makes FI/success/Coast vacuous — show "—" (F1).
+  const dash = sim.incomplete;
 
   const toggleTheme = () => {
     const dark = document.documentElement.classList.toggle('dark');
@@ -71,29 +75,40 @@ export function Header() {
 
         <div className="flex flex-1 items-center gap-5 overflow-x-auto">
           <Metric label="Net worth today" value={fmtCompact(sim.netWorthNow)} />
-          <Metric label="FI number" value={fmtCompact(sim.fiN)} />
-          <Metric label="Projected FI" value={fiLabel} tone={sim.fiAgeVal != null ? 'good' : 'bad'} />
+          <Metric label="FI number" value={dash ? '—' : fmtCompact(sim.fiN)} />
+          <Metric label="Projected FI" value={dash ? '—' : fiLabel} tone={!dash && sim.fiAgeVal != null ? 'good' : !dash ? 'bad' : undefined} />
           <Metric
             label="Success"
-            value={sim.mc ? fmtPct(sim.mc.successRate) : `…${Math.round(sim.mcProgress * 100)}%`}
-            tone={sim.mc ? (sim.mc.successRate >= 0.8 ? 'good' : sim.mc.successRate < 0.6 ? 'bad' : undefined) : undefined}
+            value={dash ? '—' : sim.mc ? fmtPct(sim.mc.successRate) : `…${Math.round(sim.mcProgress * 100)}%`}
+            tone={!dash && sim.mc ? (sim.mc.successRate >= 0.8 ? 'good' : sim.mc.successRate < 0.6 ? 'bad' : undefined) : undefined}
           />
-          <span
-            className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
-              sim.coastNow
-                ? 'bg-[var(--c-good)]/15 text-[var(--c-good)]'
-                : 'bg-[var(--c-grid)]/60 text-[var(--c-muted)]'
-            }`}
-            title={
-              sim.coastNow
-                ? 'Invested assets already compound to your FI number by retirement age with no further contributions.'
-                : sim.coastAgeVal != null
-                  ? `Projected to reach Coast FIRE at age ${sim.coastAgeVal}.`
-                  : 'Not on track to reach Coast FIRE before retirement age.'
-            }
-          >
-            ⛵ {sim.coastNow ? 'Coast FIRE' : sim.coastAgeVal != null ? `Coast @ ${sim.coastAgeVal}` : 'No coast yet'}
-          </span>
+          {dash ? (
+            <button
+              type="button"
+              onClick={() => setTab('plan')}
+              className="whitespace-nowrap rounded-full bg-[var(--c-accent)]/12 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[var(--c-accent)] hover:bg-[var(--c-accent)]/20"
+              title="FI metrics appear once the plan has annual spending."
+            >
+              ✎ Finish setup: add spending
+            </button>
+          ) : (
+            <span
+              className={`whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                sim.coastNow
+                  ? 'bg-[var(--c-good)]/15 text-[var(--c-good)]'
+                  : 'bg-[var(--c-grid)]/60 text-[var(--c-muted)]'
+              }`}
+              title={
+                sim.coastNow
+                  ? 'Invested assets already compound to your FI number by retirement age with no further contributions.'
+                  : sim.coastAgeVal != null
+                    ? `Projected to reach Coast FIRE at age ${sim.coastAgeVal}.`
+                    : 'Not on track to reach Coast FIRE before retirement age.'
+              }
+            >
+              ⛵ {sim.coastNow ? 'Coast FIRE' : sim.coastAgeVal != null ? `Coast @ ${sim.coastAgeVal}` : 'No coast yet'}
+            </span>
+          )}
         </div>
 
         <div className="relative flex items-center gap-1.5">

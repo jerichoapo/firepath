@@ -47,6 +47,8 @@ export function Btn({ children, onClick, variant = 'ghost', title, disabled }: {
 /**
  * Numeric input that tolerates in-progress typing ("", "-", "1e") by keeping local text
  * and committing parsed values. `percent` fields display ×100. Optional paired slider.
+ * `min`/`max` are in DISPLAY units (like `slider`); typing commits unclamped so partial
+ * numbers don't jump, but blur/Enter clamps the final value into range (D19).
  */
 export function NumField({ label, value, onChange, min, max, step, prefix, suffix, percent, slider, help }: {
   label: string;
@@ -76,6 +78,18 @@ export function NumField({ label, value, onChange, min, max, step, prefix, suffi
     onChange(percent ? n / 100 : n);
   };
 
+  const commitFinal = () => {
+    setFocused(false);
+    const n = Number(text);
+    if (text.trim() === '' || !Number.isFinite(n)) {
+      setText(String(display));
+      return;
+    }
+    const clamped = Math.min(max ?? Infinity, Math.max(min ?? -Infinity, n));
+    onChange(percent ? clamped / 100 : clamped);
+    setText(String(clamped));
+  };
+
   return (
     <label className="block text-xs" title={help}>
       <span className="mb-1 flex items-center justify-between text-[var(--c-ink-2)]">
@@ -92,7 +106,8 @@ export function NumField({ label, value, onChange, min, max, step, prefix, suffi
           max={max}
           step={step}
           onFocus={() => setFocused(true)}
-          onBlur={() => { setFocused(false); setText(String(display)); }}
+          onBlur={commitFinal}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.currentTarget.blur(); }}
           onChange={(e) => commit(e.target.value)}
         />
         {suffix && <span className="text-[var(--c-muted)]">{suffix}</span>}

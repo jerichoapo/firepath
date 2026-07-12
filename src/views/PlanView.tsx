@@ -12,8 +12,10 @@ import { useSim } from '../store/SimContext';
 const rowGrid = 'grid items-end gap-2';
 
 export function PlanView() {
-  const { plan, update } = usePlanStore();
+  const { plan, update, flags, setFlag } = usePlanStore();
   const sim = useSim();
+  const invalid = sim.issues.filter((i) => i.level === 'invalid');
+  const badStreams = new Set(invalid.map((i) => i.streamId).filter(Boolean));
 
   const patch = <K extends keyof PlanInput>(key: K, value: PlanInput[K]) =>
     update((p) => ({ ...p, [key]: value }));
@@ -28,6 +30,28 @@ export function PlanView() {
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      {!flags.orientationDismissed && (
+        <Card
+          title="How FirePath works"
+          className="lg:col-span-3"
+          right={<Btn onClick={() => setFlag('orientationDismissed')} title="Dismiss guide">✕ Got it</Btn>}
+        >
+          <ol className="grid list-decimal gap-1 pl-4 text-xs text-[var(--c-ink-2)] sm:grid-cols-2">
+            <li>Describe your household on this tab — accounts, income, spending, assumptions.</li>
+            <li><b>Projection</b> shows the single expected path; the header verdict updates live as you type.</li>
+            <li><b>Monte Carlo</b> and <b>Backtest</b> stress-test the same plan against randomness and against history.</li>
+            <li><b>Scenarios</b>: duplicate the plan, change one thing, and compare futures side by side.</li>
+          </ol>
+        </Card>
+      )}
+      {invalid.length > 0 && (
+        <div className="rounded-xl border border-[var(--c-bad)]/40 bg-[var(--c-bad)]/8 p-3 text-xs lg:col-span-3" role="alert">
+          <p className="mb-1 font-semibold text-[var(--c-bad)]">⚠ Fix these inputs — parts of the plan don't make sense yet:</p>
+          <ul className="grid list-disc gap-0.5 pl-4 text-[var(--c-ink-2)]">
+            {invalid.map((i, n) => <li key={n}>{i.message}</li>)}
+          </ul>
+        </div>
+      )}
       <div className="grid grid-cols-1 content-start gap-4 lg:col-span-2 xl:grid-cols-2">
         <Card title="Household" subtitle="Ages drive the whole timeline">
           <div className={`${rowGrid} grid-cols-2`}>
@@ -60,13 +84,13 @@ export function PlanView() {
                   <span className="h-2.5 w-2.5 rounded-full" style={{ background: `var(--c-${t})` }} />
                   {ACCOUNT_LABELS[t]}
                 </span>
-                <NumField label="" prefix="$" value={plan.accounts[t].balance} onChange={(v) => account(t, { balance: v })} />
-                <NumField label="" prefix="$" value={plan.accounts[t].contribution} onChange={(v) => account(t, { contribution: v })} />
+                <NumField label="" prefix="$" min={0} value={plan.accounts[t].balance} onChange={(v) => account(t, { balance: v })} />
+                <NumField label="" prefix="$" min={0} value={plan.accounts[t].contribution} onChange={(v) => account(t, { contribution: v })} />
               </div>
             ))}
             <div className={`${rowGrid} mt-1 grid-cols-2`}>
-              <NumField label="Taxable cost basis" prefix="$" value={plan.taxableCostBasis} onChange={(v) => patch('taxableCostBasis', v)} help="What you paid for the taxable balance — gains above it are taxed on withdrawal." />
-              <NumField label="Roth contribution basis" prefix="$" value={plan.rothBasis} onChange={(v) => patch('rothBasis', v)} help="Lifetime Roth contributions — withdrawable any time without tax or penalty." />
+              <NumField label="Taxable cost basis" prefix="$" min={0} value={plan.taxableCostBasis} onChange={(v) => patch('taxableCostBasis', v)} help="What you paid for the taxable balance — gains above it are taxed on withdrawal." />
+              <NumField label="Roth contribution basis" prefix="$" min={0} value={plan.rothBasis} onChange={(v) => patch('rothBasis', v)} help="Lifetime Roth contributions — withdrawable any time without tax or penalty." />
             </div>
           </div>
         </Card>
@@ -80,10 +104,15 @@ export function PlanView() {
           {plan.incomes.length === 0 && <Empty>No income streams. Add salary, consulting, or part-time income.</Empty>}
           <div className="grid gap-2">
             {plan.incomes.map((s) => (
-              <div key={s.id} className={`${rowGrid} grid-cols-[1.6fr_0.9fr_1.1fr_0.7fr_0.7fr_0.8fr_auto]`}>
+              <div
+                key={s.id}
+                className={`${rowGrid} grid-cols-[1.6fr_0.9fr_1.1fr_0.7fr_0.7fr_0.8fr_auto] ${
+                  badStreams.has(s.id) ? 'rounded-lg p-1.5 ring-1 ring-[var(--c-bad)]/60' : ''
+                }`}
+              >
                 <NumTextField label="Name" value={s.name} onChange={(name) => income(s.id, { name })} />
                 <Select label="Type" value={s.kind} onChange={(kind) => income(s.id, { kind })} options={[{ value: 'w2', label: 'W-2' }, { value: 'se', label: '1099' }]} />
-                <NumField label="Annual" prefix="$" value={s.annual} onChange={(annual) => income(s.id, { annual })} />
+                <NumField label="Annual" prefix="$" min={0} value={s.annual} onChange={(annual) => income(s.id, { annual })} />
                 <NumField label="From" value={s.startAge} onChange={(v) => income(s.id, { startAge: Math.round(v) })} />
                 <NumField label="To" value={s.endAge} onChange={(v) => income(s.id, { endAge: Math.round(v) })} help="Inclusive last age" />
                 <NumField label="Growth" suffix="%" percent value={s.growth} onChange={(growth) => income(s.id, { growth })} help="Real growth above inflation" />
@@ -92,7 +121,7 @@ export function PlanView() {
             ))}
           </div>
           <div className={`${rowGrid} mt-3 grid-cols-2 border-t border-[var(--c-border)] pt-3`}>
-            <NumField label="Social Security (household, $/yr)" prefix="$" value={plan.socialSecurity.annual} onChange={(v) => patch('socialSecurity', { ...plan.socialSecurity, annual: v })} help="Your own estimate in today's dollars (e.g., from ssa.gov). 85% is treated as taxable." />
+            <NumField label="Social Security (household, $/yr)" prefix="$" min={0} value={plan.socialSecurity.annual} onChange={(v) => patch('socialSecurity', { ...plan.socialSecurity, annual: v })} help="Your own estimate in today's dollars (e.g., from ssa.gov). 85% is treated as taxable." />
             <NumField label="Claiming age" value={plan.socialSecurity.claimAge} onChange={(v) => patch('socialSecurity', { ...plan.socialSecurity, claimAge: Math.round(v) })} min={62} max={70} slider={[62, 70, 1]} />
           </div>
         </Card>
@@ -102,12 +131,12 @@ export function PlanView() {
           subtitle="Phases let retirement spending differ from today's"
           right={<Btn onClick={() => expenses({ phases: [...plan.expenses.phases, { id: uid(), fromAge: plan.profile.retireAge, annual: plan.expenses.currentAnnual }] })}>+ Phase</Btn>}
         >
-          <NumField label="Current annual spending" prefix="$" value={plan.expenses.currentAnnual} onChange={(v) => expenses({ currentAnnual: v })} slider={[0, 300_000, 1_000]} />
+          <NumField label="Current annual spending" prefix="$" min={0} value={plan.expenses.currentAnnual} onChange={(v) => expenses({ currentAnnual: v })} slider={[0, 300_000, 1_000]} />
           <div className="mt-2 grid gap-2">
             {plan.expenses.phases.map((ph) => (
               <div key={ph.id} className={`${rowGrid} grid-cols-[1fr_1.4fr_auto]`}>
                 <NumField label="From age" value={ph.fromAge} onChange={(v) => expenses({ phases: plan.expenses.phases.map((x) => (x.id === ph.id ? { ...x, fromAge: Math.round(v) } : x)) })} />
-                <NumField label="Annual spend" prefix="$" value={ph.annual} onChange={(v) => expenses({ phases: plan.expenses.phases.map((x) => (x.id === ph.id ? { ...x, annual: v } : x)) })} />
+                <NumField label="Annual spend" prefix="$" min={0} value={ph.annual} onChange={(v) => expenses({ phases: plan.expenses.phases.map((x) => (x.id === ph.id ? { ...x, annual: v } : x)) })} />
                 <Btn variant="danger" onClick={() => expenses({ phases: plan.expenses.phases.filter((x) => x.id !== ph.id) })}>✕</Btn>
               </div>
             ))}
@@ -137,7 +166,7 @@ export function PlanView() {
             <NumField label="Cash real return" suffix="%" percent value={plan.assumptions.cashReturn} onChange={(v) => assume({ cashReturn: v })} slider={[-3, 3, 0.1]} />
             <NumField label="Stock allocation" suffix="%" percent value={plan.assumptions.stockAllocation} onChange={(v) => assume({ stockAllocation: Math.min(1, Math.max(0, v)) })} slider={[0, 100, 5]} help="Used by historical backtesting and bootstrap Monte Carlo (stocks vs 10-yr Treasuries)." />
             <NumField label="Contribution growth" suffix="%" percent value={plan.assumptions.contributionGrowth} onChange={(v) => assume({ contributionGrowth: v })} slider={[0, 8, 0.25]} help="Real annual growth of planned contributions (savings-rate growth)." />
-            <NumField label="FI multiplier" suffix="× spend" value={plan.assumptions.fiMultiplier} onChange={(v) => assume({ fiMultiplier: v })} slider={[15, 40, 0.5]} help="25× ≈ the 4% rule." />
+            <NumField label="FI multiplier" suffix="× spend" min={1} value={plan.assumptions.fiMultiplier} onChange={(v) => assume({ fiMultiplier: v })} slider={[15, 40, 0.5]} help="25× ≈ the 4% rule." />
           </div>
         </Card>
 
@@ -213,8 +242,8 @@ export function PlanView() {
         <Card title="Live projection" subtitle={`Deterministic at ${(plan.assumptions.expReturn * 100).toFixed(1)}% real`}>
           <NetWorthArea proj={sim.proj} fiN={sim.fiN} fiAgeVal={sim.fiAgeVal} height={230} compact />
           <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
-            <StatRow k="FI number" v={fmtCompact(sim.fiN)} />
-            <StatRow k="FI age" v={sim.fiAgeVal != null ? String(sim.fiAgeVal) : '—'} />
+            <StatRow k="FI number" v={sim.incomplete ? '—' : fmtCompact(sim.fiN)} />
+            <StatRow k="FI age" v={!sim.incomplete && sim.fiAgeVal != null ? String(sim.fiAgeVal) : '—'} />
             <StatRow k="Net worth @ retire" v={fmtCompact(sim.proj.rows.find((r) => r.age === plan.profile.retireAge)?.netWorth ?? 0)} />
             <StatRow k="End of plan" v={fmtCompact(sim.proj.finalNetWorth)} />
           </dl>

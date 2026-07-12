@@ -7,6 +7,7 @@ import {
 import { coastFireAge, fiAge, fiNumber } from '../engine/metrics';
 import { project } from '../engine/projection';
 import { fixedReturns } from '../engine/returns';
+import { isIncomplete, planIssues } from '../engine/validate';
 import { blankPlan, makeScenario } from '../engine/seed';
 import { fmtCompact, fmtPct } from '../lib/format';
 import { ChartTip, axisProps, gridProps, moneyAxis } from '../components/charts/chartTheme';
@@ -32,6 +33,7 @@ export function CompareView() {
         const atAge = (age: number) => proj.rows.find((r) => r.age === age)?.netWorth ?? null;
         return {
           scenario: s,
+          incomplete: isIncomplete(planIssues(s.plan)),
           fiN: fiNumber(s.plan),
           fiAgeVal: fiAge(s.plan, proj),
           coastAgeVal: coastFireAge(s.plan, proj),
@@ -130,11 +132,12 @@ export function CompareView() {
                     <span className="mr-1.5 inline-block h-2 w-2 rounded-full" style={{ background: scenarioColor(i) }} />
                     {s.name}
                   </td>
-                  <td>{fmtCompact(r.fiN)}</td>
-                  <td>{r.fiAgeVal ?? '—'}</td>
-                  <td>{r.coastAgeVal ?? '—'}</td>
-                  <td className="font-semibold" style={{ color: mcs[s.id] ? (mcs[s.id]!.successRate >= 0.8 ? 'var(--c-good)' : mcs[s.id]!.successRate < 0.6 ? 'var(--c-bad)' : undefined) : undefined }}>
-                    {mcs[s.id] ? fmtPct(mcs[s.id]!.successRate) : '…'}
+                  {/* An incomplete scenario (no spending) would report vacuous FI/success — dash it. */}
+                  <td>{r.incomplete ? '—' : fmtCompact(r.fiN)}</td>
+                  <td>{r.incomplete ? '—' : r.fiAgeVal ?? '—'}</td>
+                  <td>{r.incomplete ? '—' : r.coastAgeVal ?? '—'}</td>
+                  <td className="font-semibold" style={{ color: !r.incomplete && mcs[s.id] ? (mcs[s.id]!.successRate >= 0.8 ? 'var(--c-good)' : mcs[s.id]!.successRate < 0.6 ? 'var(--c-bad)' : undefined) : undefined }}>
+                    {r.incomplete ? '—' : mcs[s.id] ? fmtPct(mcs[s.id]!.successRate) : '…'}
                   </td>
                   {r.checks.map((v, j) => <td key={j}>{v != null ? fmtCompact(v) : '—'}</td>)}
                   <td className={r.failedAt != null ? 'font-medium text-[var(--c-bad)]' : ''}>

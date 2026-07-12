@@ -20,20 +20,31 @@ db.version(1).stores({ scenarios: 'id', meta: 'key' });
 export interface StoreState {
   scenarios: Scenario[];
   activeId: string;
+  /** One-time UI dismissals (demo banner, orientation card). Device-local; never exported/imported. */
+  flags: Record<string, boolean>;
+}
+
+function parseFlags(raw: string | undefined): Record<string, boolean> {
+  try {
+    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
 }
 
 /** Load everything, seeding the demo plan on first run. */
 export async function loadStore(): Promise<StoreState> {
   let scenarios = await db.scenarios.toArray();
   if (scenarios.length === 0) {
-    const seed = makeScenario('Base Plan', seedPlan(new Date().getFullYear()));
+    const seed = makeScenario('Demo Plan', seedPlan(new Date().getFullYear()));
     await db.scenarios.put(seed);
     await db.meta.put({ key: 'activeId', value: seed.id });
     scenarios = [seed];
   }
   const activeId = (await db.meta.get('activeId'))?.value ?? scenarios[0].id;
   const active = scenarios.some((s) => s.id === activeId) ? activeId : scenarios[0].id;
-  return { scenarios, activeId: active };
+  const flags = parseFlags((await db.meta.get('uiFlags'))?.value);
+  return { scenarios, activeId: active, flags };
 }
 
 /** Persist the whole store (scenarios are small; simplicity wins). */
@@ -42,5 +53,6 @@ export async function saveStore(state: StoreState): Promise<void> {
     await db.scenarios.clear();
     await db.scenarios.bulkPut(state.scenarios);
     await db.meta.put({ key: 'activeId', value: state.activeId });
+    await db.meta.put({ key: 'uiFlags', value: JSON.stringify(state.flags) });
   });
 }
