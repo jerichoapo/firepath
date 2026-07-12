@@ -54,6 +54,15 @@ export function allMilestones(plan: PlanInput, proj: ProjectionResult): Mileston
     { name: 'Downshift', age: profile.downshiftAge, kind: 'computed', emoji: '🌤️' },
     { name: 'Full retirement', age: profile.retireAge, kind: 'computed', emoji: '🏝️' },
     { name: 'Social Security begins', age: plan.socialSecurity.annual > 0 ? plan.socialSecurity.claimAge : null, kind: 'computed', emoji: '🏛️' },
+    {
+      name: 'Partner SS begins',
+      age:
+        profile.partnerAge != null && plan.socialSecurity.partner != null && plan.socialSecurity.partner.annual > 0
+          ? plan.socialSecurity.partner.claimAge + (profile.currentAge - profile.partnerAge)
+          : null,
+      kind: 'computed',
+      emoji: '🏛️',
+    },
     { name: 'RMDs begin', age: plan.accounts.trad.balance > 0 || plan.accounts.trad.contribution > 0 ? rmdStartAge(birthYear) : null, kind: 'computed', emoji: '📜' },
     ...plan.milestones.map((m) => ({ name: m.name, age: m.age, kind: 'user' as const, emoji: '📍' })),
   ];

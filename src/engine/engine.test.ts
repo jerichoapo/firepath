@@ -258,6 +258,41 @@ describe('backtest', () => {
   });
 });
 
+describe('partner Social Security', () => {
+  it("starts when the partner reaches THEIR claim age (age-offset from primary)", () => {
+    const p = bare();
+    p.profile.partnerAge = 37; // 3 years younger than the 40-year-old primary
+    p.socialSecurity = { annual: 0, claimAge: 67, partner: { annual: 30_000, claimAge: 67 } };
+    const proj = project(p, fixedReturns(0));
+    const ss = (age: number) => proj.rows.find((r) => r.age === age)!.socialSecurity;
+    expect(ss(69)).toBe(0);
+    expect(ss(70)).toBe(30_000); // partner turns 67 when the primary is 70
+  });
+
+  it('is ignored for solo plans even when partner data exists', () => {
+    const p = bare();
+    p.profile.partnerAge = null;
+    p.socialSecurity = { annual: 0, claimAge: 67, partner: { annual: 30_000, claimAge: 67 } };
+    const proj = project(p, fixedReturns(0));
+    expect(proj.rows.every((r) => r.socialSecurity === 0)).toBe(true);
+  });
+
+  it('taxes a split household benefit identically to a combined one', () => {
+    const split = bare();
+    split.profile.partnerAge = split.profile.currentAge; // same age → same start year
+    split.socialSecurity = { annual: 20_000, claimAge: 67, partner: { annual: 20_000, claimAge: 67 } };
+    const combined = bare();
+    combined.profile.partnerAge = combined.profile.currentAge;
+    combined.socialSecurity = { annual: 40_000, claimAge: 67 };
+    const a = project(split, fixedReturns(0)).rows;
+    const b = project(combined, fixedReturns(0)).rows;
+    for (let i = 0; i < a.length; i++) {
+      expect(a[i].socialSecurity).toBeCloseTo(b[i].socialSecurity, 8);
+      expect(a[i].taxes.total).toBeCloseTo(b[i].taxes.total, 6);
+    }
+  });
+});
+
 describe('plan validity', () => {
   it('flags a blank plan as incomplete (FI metrics would be vacuous)', () => {
     const issues = planIssues(blankPlan(START_YEAR));

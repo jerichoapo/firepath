@@ -31,7 +31,7 @@ npm run build      # typecheck + production build
 
 | Tab | What you get |
 |---|---|
-| **Plan** | Every input: ages, five account types (taxable / 401k-Trad / Roth / HSA / cash) with balances + contributions, income streams with start/end ages, Social Security estimate + claiming age, spending phases, one-time expenses, return/inflation assumptions (sliders), tax settings, withdrawal order, custom milestones. A live projection updates as you drag. |
+| **Plan** | Every input: ages, five account types (taxable / 401k-Trad / Roth / HSA / cash) with balances + contributions, income streams with start/end ages, Social Security estimates + claiming ages (yours, and your partner's keyed to their own age), spending phases, one-time expenses, real-return assumptions (sliders — everything is today's dollars, so there is deliberately no inflation knob), tax settings, withdrawal order, custom milestones. A live projection updates as you drag. |
 | **Projection** | Deterministic year-by-year stacked net-worth chart by account, FI-number and FI-age markers, and a full drill-in table (income, taxes, spending, saved, withdrawn, balances per year). |
 | **Monte Carlo** | 500–10,000 trials in a Web Worker (UI never blocks). Normal-distribution returns or **block bootstrap** sampling 5-year slices of real history to preserve momentum. Success probability, 10/25/50/75/90 percentile fan chart, ending-net-worth distribution. |
 | **Backtest** | Your plan replayed starting in **every historical year (1871–2024)** with enough remaining data, using real Shiller-derived stock/bond/inflation series. Success rate + the worst start years — sequence-of-returns risk made visible. |

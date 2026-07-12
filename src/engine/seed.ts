@@ -67,7 +67,8 @@ export function seedPlan(startYear: number): PlanInput {
       { id: uid(), name: 'Consulting (1099)', kind: 'se', annual: 12_000, startAge: 35, endAge: 44, growth: 0 },
       { id: uid(), name: 'Part-time downshift', kind: 'w2', annual: 35_000, startAge: 50, endAge: 54, growth: 0 },
     ],
-    socialSecurity: { annual: 42_000, claimAge: 67 },
+    // Split household estimate: partner is a year younger, so their benefit lands a year later.
+    socialSecurity: { annual: 24_000, claimAge: 67, partner: { annual: 18_000, claimAge: 67 } },
     expenses: {
       currentAnnual: 72_000,
       phases: [

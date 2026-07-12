@@ -65,9 +65,8 @@ export function PlanView() {
               />
             </div>
             {plan.profile.partnerAge != null && (
-              <NumField label="Partner age" value={plan.profile.partnerAge} onChange={(v) => profile({ partnerAge: Math.round(v) })} min={16} max={90} />
+              <NumField label="Partner age" value={plan.profile.partnerAge} onChange={(v) => profile({ partnerAge: Math.round(v) })} min={16} max={90} help="Sets when partner Social Security begins — their claim age is keyed to their own age." />
             )}
-            <NumField label="Downshift age" value={plan.profile.downshiftAge} onChange={(v) => profile({ downshiftAge: Math.round(v) })} help="When you plan to drop to part-time. Model the income change in Income streams." />
             <NumField label="Full retirement age" value={plan.profile.retireAge} onChange={(v) => profile({ retireAge: Math.round(v) })} help="Planned contributions stop here; the FI number uses spending at this age." />
             <NumField label="Life expectancy" value={plan.profile.lifeExpectancy} onChange={(v) => profile({ lifeExpectancy: Math.round(v) })} min={plan.profile.currentAge + 1} max={110} />
           </div>
@@ -121,8 +120,28 @@ export function PlanView() {
             ))}
           </div>
           <div className={`${rowGrid} mt-3 grid-cols-2 border-t border-[var(--c-border)] pt-3`}>
-            <NumField label="Social Security (household, $/yr)" prefix="$" min={0} value={plan.socialSecurity.annual} onChange={(v) => patch('socialSecurity', { ...plan.socialSecurity, annual: v })} help="Your own estimate in today's dollars (e.g., from ssa.gov). 85% is treated as taxable." />
-            <NumField label="Claiming age" value={plan.socialSecurity.claimAge} onChange={(v) => patch('socialSecurity', { ...plan.socialSecurity, claimAge: Math.round(v) })} min={62} max={70} slider={[62, 70, 1]} />
+            <NumField label="Social Security — you ($/yr)" prefix="$" min={0} value={plan.socialSecurity.annual} onChange={(v) => patch('socialSecurity', { ...plan.socialSecurity, annual: v })} help="Your own estimate in today's dollars (e.g., from ssa.gov). 85% is treated as taxable." />
+            <NumField label="Your claiming age" value={plan.socialSecurity.claimAge} onChange={(v) => patch('socialSecurity', { ...plan.socialSecurity, claimAge: Math.round(v) })} min={62} max={70} slider={[62, 70, 1]} />
+            {plan.profile.partnerAge != null && (
+              <>
+                <NumField
+                  label="Social Security — partner ($/yr)"
+                  prefix="$"
+                  min={0}
+                  value={plan.socialSecurity.partner?.annual ?? 0}
+                  onChange={(v) => patch('socialSecurity', { ...plan.socialSecurity, partner: { claimAge: 67, ...plan.socialSecurity.partner, annual: v } })}
+                  help="Begins when your partner reaches their claim age (keyed to their own age, not yours)."
+                />
+                <NumField
+                  label="Partner claiming age"
+                  value={plan.socialSecurity.partner?.claimAge ?? 67}
+                  onChange={(v) => patch('socialSecurity', { ...plan.socialSecurity, partner: { annual: 0, ...plan.socialSecurity.partner, claimAge: Math.round(v) } })}
+                  min={62}
+                  max={70}
+                  slider={[62, 70, 1]}
+                />
+              </>
+            )}
           </div>
         </Card>
 
@@ -162,11 +181,22 @@ export function PlanView() {
           <div className={`${rowGrid} grid-cols-2`}>
             <NumField label="Expected real return" suffix="%" percent value={plan.assumptions.expReturn} onChange={(v) => assume({ expReturn: v })} slider={[0, 12, 0.1]} />
             <NumField label="Return volatility (σ)" suffix="%" percent value={plan.assumptions.returnSd} onChange={(v) => assume({ returnSd: v })} slider={[0, 30, 0.5]} />
-            <NumField label="Inflation (reference)" suffix="%" percent value={plan.assumptions.inflation} onChange={(v) => assume({ inflation: v })} slider={[0, 8, 0.1]} help="Everything is modeled in today's dollars; this is context for choosing real rates." />
             <NumField label="Cash real return" suffix="%" percent value={plan.assumptions.cashReturn} onChange={(v) => assume({ cashReturn: v })} slider={[-3, 3, 0.1]} />
             <NumField label="Stock allocation" suffix="%" percent value={plan.assumptions.stockAllocation} onChange={(v) => assume({ stockAllocation: Math.min(1, Math.max(0, v)) })} slider={[0, 100, 5]} help="Used by historical backtesting and bootstrap Monte Carlo (stocks vs 10-yr Treasuries)." />
             <NumField label="Contribution growth" suffix="%" percent value={plan.assumptions.contributionGrowth} onChange={(v) => assume({ contributionGrowth: v })} slider={[0, 8, 0.25]} help="Real annual growth of planned contributions (savings-rate growth)." />
-            <NumField label="FI multiplier" suffix="× spend" min={1} value={plan.assumptions.fiMultiplier} onChange={(v) => assume({ fiMultiplier: v })} slider={[15, 40, 0.5]} help="25× ≈ the 4% rule." />
+            <NumField
+              label={`FI multiplier (= ${plan.assumptions.fiMultiplier > 0 ? (100 / plan.assumptions.fiMultiplier).toFixed(1) : '—'}% withdrawal rate)`}
+              suffix="× spend"
+              min={1}
+              value={plan.assumptions.fiMultiplier}
+              onChange={(v) => assume({ fiMultiplier: v })}
+              slider={[15, 40, 0.5]}
+              help="25× spending is the 4% rule; 30× is a 3.3% withdrawal rate."
+            />
+            <p className="col-span-2 rounded-lg bg-[var(--c-page)] p-2.5 text-[11px] leading-relaxed text-[var(--c-ink-2)]">
+              💡 All figures are <b>today's dollars</b> and every rate above is <b>real</b> (inflation-adjusted).
+              Inflation is already netted out of the model, so there's no inflation knob to turn.
+            </p>
           </div>
         </Card>
 
@@ -217,6 +247,10 @@ export function PlanView() {
                 ))}
               </div>
             </div>
+            <p className="text-[11px] text-[var(--c-muted)]">
+              Not modeled: Roth conversion ladders. Early tax-deferred withdrawals pay the 10%
+              penalty here — a conservative simplification for early retirees.
+            </p>
           </div>
         </Card>
 
@@ -225,6 +259,17 @@ export function PlanView() {
           subtitle="Personal markers for the timeline"
           right={<Btn onClick={() => patch('milestones', [...plan.milestones, { id: uid(), name: 'New milestone', age: plan.profile.currentAge + 10 }])}>+ Add</Btn>}
         >
+          <div className={`${rowGrid} mb-3 grid-cols-2 border-b border-[var(--c-border)] pb-3`}>
+            <NumField
+              label="Downshift / part-time age"
+              value={plan.profile.downshiftAge}
+              onChange={(v) => profile({ downshiftAge: Math.round(v) })}
+              help="A timeline marker only — model the actual income change in Income streams."
+            />
+            <p className="self-center text-[11px] text-[var(--c-muted)]">
+              🌤️ Shown on the timeline; it doesn't change any money math.
+            </p>
+          </div>
           {plan.milestones.length === 0 && <Empty>Kid starts college, mortgage paid off…</Empty>}
           <div className="grid gap-2">
             {plan.milestones.map((m) => (

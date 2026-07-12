@@ -40,6 +40,8 @@ export interface SocialSecurityInput {
   /** Estimated annual benefit in today's $ (user supplies; no bend-point math). */
   annual: number;
   claimAge: number;
+  /** Partner's own benefit, keyed to the PARTNER's age (D21). Ignored for solo plans. */
+  partner?: { annual: number; claimAge: number };
 }
 
 export interface SpendingPhase {

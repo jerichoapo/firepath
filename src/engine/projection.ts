@@ -71,7 +71,14 @@ export function project(plan: PlanInput, returns: ReturnGenerator): ProjectionRe
       else se += amount;
     }
     const earned = w2 + se;
-    const ssIncome = age >= ss.claimAge ? ss.annual : 0;
+    // Partner SS is keyed to the partner's own age: they are (currentAge − partnerAge)
+    // years younger, so their benefit begins when age − gap reaches their claim age (D21).
+    const partnerSs =
+      profile.partnerAge != null && ss.partner != null &&
+      age - (profile.currentAge - profile.partnerAge) >= ss.partner.claimAge
+        ? ss.partner.annual
+        : 0;
+    const ssIncome = (age >= ss.claimAge ? ss.annual : 0) + partnerSs;
 
     const contribScale =
       age >= profile.retireAge ? 0 : (1 + assumptions.contributionGrowth) ** yearIndex;

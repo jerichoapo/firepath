@@ -146,3 +146,20 @@ don't jump while typing. Negative balances are clamped to $0 rather than accepte
 modeling would change withdrawal math and net-worth semantics, and half-supporting it is
 worse than not supporting it. UI dismissals (demo banner, orientation card) persist in the
 Dexie meta table as device-local flags, deliberately excluded from JSON export/import.
+
+## D20. The inflation input is gone; the convention is stated instead
+Everything in FirePath is today's dollars with real returns (D1), so an inflation slider
+can never move a number — and a knob that does nothing reads as a broken app. The slider
+is removed and replaced by a visible statement in the Assumptions card. The `inflation`
+field stays in the data model so old exports round-trip. A nominal-dollars *display*
+toggle (which would make inflation meaningful again) is deferred: it must sweep every
+chart and table at once or it creates mixed-mode confusion.
+
+## D21. Partner Social Security is the one couple-mode engine effect (refines D16)
+`socialSecurity.partner {annual, claimAge}` pays a second benefit keyed to the PARTNER's
+own age (primary age − age gap), taxed at the same 85% share as part of the combined
+household benefit. This makes partner age a real input rather than decoration, at ~5 lines
+of engine cost. Everything else in D16 stands: one RMD clock, one penalty age, one
+retirement age — full dual-person tracking remains out of scope. The downshift-age input
+moved from Household to the Milestones card and is labeled as a timeline marker, which is
+all it ever was.
