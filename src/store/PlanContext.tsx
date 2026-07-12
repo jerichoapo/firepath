@@ -106,10 +106,24 @@ export function PlanProvider({ initial, children }: { initial: StoreState; child
           if (data.app !== 'firepath' || !Array.isArray(data.scenarios) || data.scenarios.length === 0) {
             return 'Not a FirePath export file.';
           }
-          const activeId = data.scenarios.some((s) => s.id === data.activeId)
+          // JSON has no Infinity: the top state bracket round-trips as null — revive it.
+          const scenarios = data.scenarios.map((s) => ({
+            ...s,
+            plan: {
+              ...s.plan,
+              tax: {
+                ...s.plan.tax,
+                stateBrackets: s.plan.tax.stateBrackets.map((b) => ({
+                  ...b,
+                  upTo: b.upTo == null ? Infinity : b.upTo,
+                })),
+              },
+            },
+          }));
+          const activeId = scenarios.some((s) => s.id === data.activeId)
             ? data.activeId!
-            : data.scenarios[0].id;
-          dispatch({ type: 'replaceAll', state: { scenarios: data.scenarios, activeId } });
+            : scenarios[0].id;
+          dispatch({ type: 'replaceAll', state: { scenarios, activeId } });
           return null;
         } catch {
           return 'Could not parse that file as JSON.';

@@ -60,7 +60,7 @@ export function CompareView() {
   const waiting = store.scenarios.filter((s) => !mcs[s.id]).length;
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <Card
         title="Scenarios"
         subtitle="Each scenario is a full, independently editable copy of the plan"
@@ -82,10 +82,11 @@ export function CompareView() {
               {renaming === s.id ? (
                 <input
                   autoFocus
-                  defaultValue={s.name}
+                  value={s.name}
                   className="w-28 bg-transparent font-medium outline-none"
-                  onBlur={(e) => { store.dispatch({ type: 'rename', id: s.id, name: e.target.value || s.name }); setRenaming(null); }}
-                  onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+                  onChange={(e) => store.dispatch({ type: 'rename', id: s.id, name: e.target.value })}
+                  onBlur={() => { if (!s.name.trim()) store.dispatch({ type: 'rename', id: s.id, name: 'Untitled' }); setRenaming(null); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') setRenaming(null); }}
                 />
               ) : (
                 <button type="button" className="font-medium" title="Switch to this scenario" onClick={() => store.dispatch({ type: 'select', id: s.id })}>

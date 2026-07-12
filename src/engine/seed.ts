@@ -1,6 +1,7 @@
 // First-run seed persona and the blank plan (DECISIONS.md D15).
 // The seed is deliberately generic — it exists so the app demos itself.
 
+import { MC_DEFAULT_RUNS } from './montecarlo';
 import type { PlanInput, Scenario } from './types';
 
 export const uid = (): string =>
@@ -42,7 +43,7 @@ export function blankPlan(startYear: number): PlanInput {
       stateStdDeduction: 0,
       withdrawalOrder: [...DEFAULT_WITHDRAWAL_ORDER],
     },
-    mc: { runs: 5000, mode: 'normal' },
+    mc: { runs: MC_DEFAULT_RUNS, mode: 'normal' },
     milestones: [],
   };
 }

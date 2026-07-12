@@ -18,7 +18,7 @@ export function BacktestView() {
 
   const failures = backtest.starts.filter((s) => s.failedAtAge !== null);
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <div className="grid gap-4 sm:grid-cols-3">
         <Card title="Historical success rate">
           <p className="text-5xl font-bold tabular-nums" style={{ color: backtest.successRate >= 0.8 ? 'var(--c-good)' : 'var(--c-bad)' }}>

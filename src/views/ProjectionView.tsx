@@ -9,7 +9,7 @@ export function ProjectionView() {
   const { plan, proj, fiN, fiAgeVal, coastAgeVal } = useSim();
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <Card
         title="Net worth by account"
         subtitle={`Deterministic projection at ${(plan.assumptions.expReturn * 100).toFixed(1)}% real return, today's dollars`}

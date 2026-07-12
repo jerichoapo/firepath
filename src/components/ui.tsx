@@ -9,7 +9,7 @@ export function Card({ title, subtitle, right, children, className = '' }: {
   return (
     <section className={`rounded-xl border border-[var(--c-border)] bg-[var(--c-surface)] p-4 ${className}`}>
       {(title || right) && (
-        <header className="mb-3 flex items-start justify-between gap-2">
+        <header className="mb-3 flex flex-wrap items-start justify-between gap-2">
           <div>
             <h3 className="text-sm font-semibold">{title}</h3>
             {subtitle && <p className="mt-0.5 text-xs text-[var(--c-muted)]">{subtitle}</p>}

@@ -27,8 +27,8 @@ export function PlanView() {
     patch('incomes', plan.incomes.map((i) => (i.id === id ? { ...i, ...s } : i)));
 
   return (
-    <div className="grid gap-4 lg:grid-cols-3">
-      <div className="grid content-start gap-4 lg:col-span-2 xl:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 content-start gap-4 lg:col-span-2 xl:grid-cols-2">
         <Card title="Household" subtitle="Ages drive the whole timeline">
           <div className={`${rowGrid} grid-cols-2`}>
             <NumField label="Your age" value={plan.profile.currentAge} onChange={(v) => profile({ currentAge: Math.round(v) })} min={16} max={90} />

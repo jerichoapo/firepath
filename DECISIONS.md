@@ -113,3 +113,23 @@ retire at 55, SS at 67, spending $72K now / $80K ages 55–70 / $65K after, one-
 down-payment and college expenses, plus two user milestones. Generic, plausible, and
 demonstrates every feature (phases, one-times, SS, milestones) without being anyone's real
 numbers. One click "Reset to blank plan" zeroes everything.
+
+## D16. Partner age is informational
+The partner-age input drives the couple/solo toggle (defaulting filing status expectations)
+and appears in the household card, but income streams, Social Security, and penalties are
+keyed to the primary person's age. A couple models the partner's income as its own stream
+and can fold both SS benefits into the single household estimate. Full dual-person age
+tracking (two RMD clocks, two SS claims, survivor spending) is deliberate scope cut — it
+roughly doubles engine complexity for marginal planning value at this fidelity.
+
+## D17. The Sankey shows funded flows at gross values
+Income sources appear gross (before withholding); taxes, spending, per-account
+contributions (including pre-tax), and the leftover sweep appear as outflows of a single
+"household cash flow" hub, so inflow always equals outflow. In a failure year the spending
+node shrinks to what was actually fundable and a warning banner shows the gap (a Sankey
+cannot draw money that doesn't exist).
+
+## D18. UI inputs commit on change, not on blur
+Text/number fields and the scenario rename commit to state on every keystroke (debounced
+400 ms into IndexedDB). Blur-only commits lose edits when focus never lands (automation,
+some keyboard flows) and add a stale-value class of bugs for zero benefit at this scale.

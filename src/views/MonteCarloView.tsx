@@ -104,7 +104,7 @@ export function MonteCarloView() {
   const { mc, mcProgress } = useSim();
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
         <Card title="Simulation settings" subtitle="Runs in a Web Worker — the UI never blocks">
           <div className="grid gap-3">

@@ -128,7 +128,7 @@ export function SankeyView() {
   const withdrawn = ACCOUNT_TYPES.reduce((s, t) => s + row.withdrawals[t], 0) + row.rmd;
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <Card title="Cash flow by year" subtitle="Where money comes from and where it goes in a single simulated year">
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" className="rounded-lg border border-[var(--c-border)] px-2 py-1 text-sm" onClick={() => setAge(clamped - 1)} disabled={clamped <= plan.profile.currentAge}>←</button>

@@ -18,7 +18,7 @@ export function TimelineView() {
   for (let a = Math.ceil(currentAge / 5) * 5; a <= lifeExpectancy; a += 5) decades.push(a);
 
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       <Card title="Life timeline" subtitle="Computed milestones (FI, Coast, RMDs…) plus your own markers">
         <svg viewBox={`0 0 ${W} 300`} className="w-full" role="img" aria-label="Milestones timeline">
           {/* phase bands */}
