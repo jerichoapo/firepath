@@ -60,9 +60,10 @@ export function activeScenarioName(page: Page) {
 }
 
 /** The value <p> of a header metric chip, located from its uppercase label.
+ *  Substring match: some labels carry a suffix tag (e.g. "Success · normal MC").
  *  Scoped to the banner — labels like "FI number" also appear inside views. */
 export function headerMetric(page: Page, label: string) {
-  return page.getByRole('banner').getByText(label, { exact: true }).locator('xpath=following-sibling::p');
+  return page.getByRole('banner').getByText(label).locator('xpath=following-sibling::p');
 }
 
 /** Wait until a UI flag (banner dismissal) has actually been persisted to IndexedDB —

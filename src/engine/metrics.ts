@@ -2,7 +2,7 @@
 
 import { spendingAtAge } from './projection';
 import { rmdStartAge } from './taxConfig';
-import type { PlanInput, ProjectionResult } from './types';
+import type { PlanInput, ProjectionResult, YearRow } from './types';
 
 export const currentNetWorth = (plan: PlanInput): number =>
   Object.values(plan.accounts).reduce((s, a) => s + a.balance, 0);
@@ -35,6 +35,31 @@ export function coastFireAge(plan: PlanInput, proj: ProjectionResult): number | 
   if (isCoastFireNow(plan)) return plan.profile.currentAge;
   return proj.rows.find((r) => r.age <= plan.profile.retireAge && r.invested >= coastNumberAt(plan, r.age))
     ?.age ?? null;
+}
+
+/** Share of after-tax income saved in a simulated year; null when there is no income. */
+export function savingsRate(row: YearRow): number | null {
+  const afterTax = row.grossIncome - row.taxes.total;
+  if (afterTax <= 0) return null;
+  const saved = Object.values(row.contributions).reduce((s, x) => s + x, 0) + row.leftoverToTaxable;
+  return saved / afterTax;
+}
+
+/**
+ * First age of sustained drawdown: the year AFTER the last net-saving year, so one-off
+ * expense blips (a down payment year) don't start the band early (D22).
+ * Null = the plan never draws down.
+ */
+export function drawdownStartAge(proj: ProjectionResult): number | null {
+  let lastSaving: number | null = null;
+  for (const r of proj.rows) {
+    const saved = Object.values(r.contributions).reduce((s, x) => s + x, 0) + r.leftoverToTaxable;
+    const withdrawn = Object.values(r.withdrawals).reduce((s, x) => s + x, 0) + r.rmd;
+    if (saved > withdrawn + 1) lastSaving = r.age;
+  }
+  if (lastSaving === null) return proj.rows[0]?.age ?? null; // never saved → drawing from day one
+  const lastAge = proj.rows[proj.rows.length - 1]?.age;
+  return lastAge !== undefined && lastSaving + 1 <= lastAge ? lastSaving + 1 : null;
 }
 
 export interface Milestone {

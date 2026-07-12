@@ -15,7 +15,7 @@ const TABS: Array<[label: string, landmark: RegExp]> = [
 test('first run seeds the demo household and shows headline metrics', async ({ freshApp: page }) => {
   await expect(page).toHaveTitle(/FirePath/);
   for (const label of ['Net worth today', 'FI number', 'Projected FI', 'Success']) {
-    await expect(page.getByRole('banner').getByText(label, { exact: true })).toBeVisible();
+    await expect(page.getByRole('banner').getByText(label)).toBeVisible();
   }
   await expect(page.locator('select[aria-label="Active scenario"] option')).toHaveText(['Demo Plan']);
   // Real dollar figures, not placeholders — and Monte Carlo completes in the header.

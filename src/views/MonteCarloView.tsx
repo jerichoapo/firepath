@@ -6,11 +6,12 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps,
 } from 'recharts';
 import { MC_MAX_RUNS, MC_MIN_RUNS, quantileOfSorted, type McResult } from '../engine/montecarlo';
+import { portfolioStats } from '../engine/returns';
 import { fmtCompact, fmtPct, fmtUSD } from '../lib/format';
 import { axisProps, gridProps, moneyAxis } from '../components/charts/chartTheme';
 import { Card, Empty, NumField, Segmented } from '../components/ui';
 import { usePlanStore } from '../store/PlanContext';
-import { useSim } from '../store/SimContext';
+import { useAltMc, useSim } from '../store/SimContext';
 
 function FanTip({ active, label, payload }: TooltipProps<number, string>) {
   const row = payload?.[0]?.payload as { p50: number; outer: [number, number]; inner: [number, number] } | undefined;
@@ -101,7 +102,8 @@ function OutcomeHistogram({ finals }: { finals: number[] }) {
 
 export function MonteCarloView() {
   const { plan, update } = usePlanStore();
-  const { mc, mcProgress, incomplete } = useSim();
+  const { mc, mcProgress, incomplete, backtest } = useSim();
+  const alt = useAltMc();
 
   if (incomplete) {
     return (
@@ -110,6 +112,30 @@ export function MonteCarloView() {
       </Card>
     );
   }
+
+  const { expReturn, returnSd, stockAllocation } = plan.assumptions;
+  const hist = portfolioStats(stockAllocation);
+  const alloc = `${Math.round(stockAllocation * 100)}/${Math.round((1 - stockAllocation) * 100)}`;
+  const methods: { name: string; active: boolean; source: string; result: { successRate: number } | null }[] = [
+    {
+      name: 'Monte Carlo — normal',
+      active: plan.mc.mode === 'normal',
+      source: `Your assumptions: μ ${(expReturn * 100).toFixed(1)}% real · σ ${(returnSd * 100).toFixed(1)}%, drawn independently each year`,
+      result: plan.mc.mode === 'normal' ? mc : alt.result,
+    },
+    {
+      name: 'Monte Carlo — bootstrap',
+      active: plan.mc.mode === 'bootstrap',
+      source: `5-year blocks of the 1871–2024 record at ${alloc} stock/bond (${(hist.mean * 100).toFixed(1)}% real · σ ${(hist.sd * 100).toFixed(1)}%)`,
+      result: plan.mc.mode === 'bootstrap' ? mc : alt.result,
+    },
+    {
+      name: 'Historical backtest',
+      active: false,
+      source: `The same ${alloc} record replayed in sequence from every possible start year`,
+      result: backtest,
+    },
+  ];
 
   return (
     <div className="grid grid-cols-1 gap-4">
@@ -166,6 +192,37 @@ export function MonteCarloView() {
           )}
         </Card>
       </div>
+
+      <Card
+        title="About these numbers"
+        subtitle="Same plan, three ways to model returns — a gap between them is your margin of safety, not a bug"
+      >
+        <table className="w-full text-left text-xs">
+          <thead>
+            <tr className="border-b border-[var(--c-border)] text-[10px] uppercase tracking-wide text-[var(--c-muted)]">
+              <th className="py-2 pr-3 font-medium">Method</th>
+              <th className="pr-3 font-medium">Returns come from</th>
+              <th className="text-right font-medium">Success</th>
+            </tr>
+          </thead>
+          <tbody>
+            {methods.map((m) => (
+              <tr key={m.name} className={`border-b border-[var(--c-grid)]/60 ${m.active ? 'bg-[var(--c-accent)]/5' : ''}`}>
+                <td className="py-1.5 pr-3 font-medium">
+                  {m.name}
+                  {m.active && <span className="ml-1.5 rounded bg-[var(--c-accent)]/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-[var(--c-accent)]">in header</span>}
+                </td>
+                <td className="pr-3 text-[var(--c-ink-2)]">{m.source}</td>
+                <td className="text-right font-semibold tabular-nums">{m.result ? fmtPct(m.result.successRate) : '…'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p className="mt-2 text-[11px] text-[var(--c-muted)]">
+          Normal mode prices <i>your</i> assumptions; the two historical modes replay the record.
+          When your μ is more conservative than history's, normal-mode success will sit below the other two.
+        </p>
+      </Card>
 
       {mc && (
         <>

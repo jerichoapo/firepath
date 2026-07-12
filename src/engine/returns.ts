@@ -35,6 +35,14 @@ export function historicalPortfolio(stockAllocation: number, data: HistoricalYea
   return data.map((d) => stockAllocation * d.stock + (1 - stockAllocation) * d.bond);
 }
 
+/** Mean and sample σ of the blended historical record — what bootstrap/backtest implicitly assume. */
+export function portfolioStats(stockAllocation: number, data: HistoricalYear[] = HISTORICAL): { mean: number; sd: number } {
+  const r = historicalPortfolio(stockAllocation, data);
+  const mean = r.reduce((s, x) => s + x, 0) / r.length;
+  const sd = Math.sqrt(r.reduce((s, x) => s + (x - mean) ** 2, 0) / (r.length - 1));
+  return { mean, sd };
+}
+
 /** Historical sequence starting at index `start` (for backtesting). */
 export function historicalReturns(portfolio: number[], start: number): ReturnGenerator {
   return (i) => portfolio[start + i];

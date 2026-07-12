@@ -1,6 +1,7 @@
-// A horizontal life timeline: accumulation → drawdown phases with computed and
-// user-defined milestones staggered above/below the axis.
+// A horizontal life timeline: saving → drawing-down phases (derived from actual flows,
+// D22) with computed and user-defined milestones staggered above/below the axis.
 
+import { drawdownStartAge } from '../engine/metrics';
 import { Card } from '../components/ui';
 import { useSim } from '../store/SimContext';
 
@@ -9,10 +10,14 @@ const AXIS_Y = 150;
 const LEVELS = [-96, 62, -56, 102, -16] as const; // label stagger offsets from the axis
 
 export function TimelineView() {
-  const { plan, milestones } = useSim();
-  const { currentAge, retireAge, lifeExpectancy } = plan.profile;
+  const { plan, milestones, proj } = useSim();
+  const { currentAge, lifeExpectancy } = plan.profile;
   const x = (age: number) => 40 + ((age - currentAge) / Math.max(1, lifeExpectancy - currentAge)) * (W - 80);
   const year = (age: number) => plan.planStartYear + age - currentAge;
+
+  // Bands split where the money actually turns around, not at the retirement age input.
+  const ddStart = drawdownStartAge(proj);
+  const splitAge = Math.min(Math.max(ddStart ?? lifeExpectancy, currentAge), lifeExpectancy);
 
   const decades = [];
   for (let a = Math.ceil(currentAge / 5) * 5; a <= lifeExpectancy; a += 5) decades.push(a);
@@ -21,15 +26,17 @@ export function TimelineView() {
     <div className="grid grid-cols-1 gap-4">
       <Card title="Life timeline" subtitle="Computed milestones (FI, Coast, RMDs…) plus your own markers">
         <svg viewBox={`0 0 ${W} 300`} className="w-full" role="img" aria-label="Milestones timeline">
-          {/* phase bands */}
-          <rect x={x(currentAge)} y={AXIS_Y - 11} width={x(Math.min(retireAge, lifeExpectancy)) - x(currentAge)} height={22} rx={11} fill="var(--c-taxable)" opacity={0.15} />
-          <rect x={x(Math.min(retireAge, lifeExpectancy))} y={AXIS_Y - 11} width={Math.max(0, x(lifeExpectancy) - x(retireAge))} height={22} rx={11} fill="var(--c-trad)" opacity={0.15} />
-          <text x={(x(currentAge) + x(Math.min(retireAge, lifeExpectancy))) / 2} y={AXIS_Y + 4} textAnchor="middle" fontSize={11} fill="var(--c-ink-2)">
-            Accumulation
-          </text>
-          {retireAge < lifeExpectancy && (
-            <text x={(x(retireAge) + x(lifeExpectancy)) / 2} y={AXIS_Y + 4} textAnchor="middle" fontSize={11} fill="var(--c-ink-2)">
-              Drawdown
+          {/* phase bands — split where net flows flip from saving to withdrawing (D22) */}
+          <rect x={x(currentAge)} y={AXIS_Y - 11} width={x(splitAge) - x(currentAge)} height={22} rx={11} fill="var(--c-taxable)" opacity={0.15} />
+          <rect x={x(splitAge)} y={AXIS_Y - 11} width={Math.max(0, x(lifeExpectancy) - x(splitAge))} height={22} rx={11} fill="var(--c-trad)" opacity={0.15} />
+          {splitAge > currentAge && (
+            <text x={(x(currentAge) + x(splitAge)) / 2} y={AXIS_Y + 4} textAnchor="middle" fontSize={11} fill="var(--c-ink-2)">
+              Saving
+            </text>
+          )}
+          {ddStart != null && splitAge < lifeExpectancy && (
+            <text x={(x(splitAge) + x(lifeExpectancy)) / 2} y={AXIS_Y + 4} textAnchor="middle" fontSize={11} fill="var(--c-ink-2)">
+              Drawing down (from {splitAge})
             </text>
           )}
 

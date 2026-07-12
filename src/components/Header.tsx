@@ -9,10 +9,10 @@ import { usePlanStore } from '../store/PlanContext';
 import { useSim } from '../store/SimContext';
 import { Btn } from './ui';
 
-function Metric({ label, value, tone }: { label: string; value: string; tone?: 'good' | 'bad' }) {
+function Metric({ label, value, tone, title }: { label: string; value: string; tone?: 'good' | 'bad'; title?: string }) {
   const color = tone === 'good' ? 'text-[var(--c-good)]' : tone === 'bad' ? 'text-[var(--c-bad)]' : '';
   return (
-    <div className="min-w-0">
+    <div className="min-w-0" title={title}>
       <p className="text-[10px] uppercase tracking-wide text-[var(--c-muted)]">{label}</p>
       <p className={`truncate text-sm font-semibold tabular-nums ${color}`}>{value}</p>
     </div>
@@ -78,7 +78,12 @@ export function Header() {
           <Metric label="FI number" value={dash ? '—' : fmtCompact(sim.fiN)} />
           <Metric label="Projected FI" value={dash ? '—' : fiLabel} tone={!dash && sim.fiAgeVal != null ? 'good' : !dash ? 'bad' : undefined} />
           <Metric
-            label="Success"
+            label={`Success · ${sim.plan.mc.mode === 'normal' ? 'normal MC' : 'bootstrap MC'}`}
+            title={
+              sim.plan.mc.mode === 'normal'
+                ? `Monte Carlo with your assumptions: μ ${(sim.plan.assumptions.expReturn * 100).toFixed(1)}% real, σ ${(sim.plan.assumptions.returnSd * 100).toFixed(1)}%. Compare all three models on the Monte Carlo tab.`
+                : `Monte Carlo sampling 5-year blocks of 1871–2024 history at your ${Math.round(sim.plan.assumptions.stockAllocation * 100)}% stock allocation. Compare all three models on the Monte Carlo tab.`
+            }
             value={dash ? '—' : sim.mc ? fmtPct(sim.mc.successRate) : `…${Math.round(sim.mcProgress * 100)}%`}
             tone={!dash && sim.mc ? (sim.mc.successRate >= 0.8 ? 'good' : sim.mc.successRate < 0.6 ? 'bad' : undefined) : undefined}
           />

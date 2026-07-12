@@ -12,7 +12,7 @@ export function ProjectionView() {
     <div className="grid grid-cols-1 gap-4">
       <Card
         title="Net worth by account"
-        subtitle={`Deterministic projection at ${(plan.assumptions.expReturn * 100).toFixed(1)}% real return, today's dollars`}
+        subtitle={`Deterministic projection at ${(plan.assumptions.expReturn * 100).toFixed(1)}% real return, today's dollars — the FI line compares against the dashed invested series (net worth minus cash)`}
         right={
           <div className="flex gap-4 text-xs">
             <span>🔥 FI {fiAgeVal != null ? `at ${fiAgeVal}` : 'not reached'}</span>

@@ -2,8 +2,10 @@
 // projection preview in a sticky rail. Charts everywhere update as you type/drag.
 
 import { ACCOUNT_LABELS, ACCOUNT_TYPES, type AccountInput, type AccountType, type Assumptions, type ExpensesInput, type IncomeStream, type PlanInput, type Profile, type TaxSettings } from '../engine/types';
+import { savingsRate } from '../engine/metrics';
+import { portfolioStats } from '../engine/returns';
 import { uid } from '../engine/seed';
-import { fmtCompact } from '../lib/format';
+import { fmtCompact, fmtPct } from '../lib/format';
 import { NetWorthArea } from '../components/charts/NetWorthArea';
 import { Btn, Card, Empty, NumField, Segmented, Select } from '../components/ui';
 import { usePlanStore } from '../store/PlanContext';
@@ -16,6 +18,9 @@ export function PlanView() {
   const sim = useSim();
   const invalid = sim.issues.filter((i) => i.level === 'invalid');
   const badStreams = new Set(invalid.map((i) => i.streamId).filter(Boolean));
+  const sr = sim.proj.rows.length > 0 ? savingsRate(sim.proj.rows[0]) : null;
+  const hist = portfolioStats(plan.assumptions.stockAllocation);
+  const allocLabel = `${Math.round(plan.assumptions.stockAllocation * 100)}/${Math.round((1 - plan.assumptions.stockAllocation) * 100)}`;
 
   const patch = <K extends keyof PlanInput>(key: K, value: PlanInput[K]) =>
     update((p) => ({ ...p, [key]: value }));
@@ -196,6 +201,9 @@ export function PlanView() {
             <p className="col-span-2 rounded-lg bg-[var(--c-page)] p-2.5 text-[11px] leading-relaxed text-[var(--c-ink-2)]">
               💡 All figures are <b>today's dollars</b> and every rate above is <b>real</b> (inflation-adjusted).
               Inflation is already netted out of the model, so there's no inflation knob to turn.
+              For reference, the 1871–2024 record at your {allocLabel} stock/bond mix:{' '}
+              <b>{(hist.mean * 100).toFixed(1)}% real · σ {(hist.sd * 100).toFixed(1)}%</b> — that's what
+              bootstrap Monte Carlo and the backtest replay.
             </p>
           </div>
         </Card>
@@ -289,6 +297,7 @@ export function PlanView() {
           <dl className="mt-3 grid grid-cols-2 gap-2 text-xs">
             <StatRow k="FI number" v={sim.incomplete ? '—' : fmtCompact(sim.fiN)} />
             <StatRow k="FI age" v={!sim.incomplete && sim.fiAgeVal != null ? String(sim.fiAgeVal) : '—'} />
+            <StatRow k="Savings rate (yr 1)" v={sr != null ? fmtPct(sr) : '—'} />
             <StatRow k="Net worth @ retire" v={fmtCompact(sim.proj.rows.find((r) => r.age === plan.profile.retireAge)?.netWorth ?? 0)} />
             <StatRow k="End of plan" v={fmtCompact(sim.proj.finalNetWorth)} />
           </dl>

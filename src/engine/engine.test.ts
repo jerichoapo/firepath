@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { runBacktest } from './backtest';
 import { HISTORICAL } from './data/historical';
-import { coastNumberAt, fiAge, fiNumber, isCoastFireNow } from './metrics';
+import { coastNumberAt, drawdownStartAge, fiAge, fiNumber, isCoastFireNow, savingsRate } from './metrics';
 import { runMonteCarlo } from './montecarlo';
 import { project, spendingAtAge } from './projection';
-import { bootstrapReturns, fixedReturns, historicalPortfolio, mulberry32 } from './returns';
+import { bootstrapReturns, fixedReturns, historicalPortfolio, mulberry32, portfolioStats } from './returns';
 import { bracketTax, federalTax, ltcgTax, payrollTax } from './tax';
 import { FEDERAL_2026 } from './taxConfig';
 import { blankPlan, seedPlan } from './seed';
@@ -255,6 +255,34 @@ describe('backtest', () => {
       expect(h.bond).toBeGreaterThan(-0.4);
       expect(h.bond).toBeLessThan(0.5);
     }
+  });
+});
+
+describe('reconciliation helpers', () => {
+  it('portfolioStats matches the known historical record', () => {
+    const stocks = portfolioStats(1);
+    expect(stocks.mean).toBeCloseTo(0.0828, 2); // generate-script sanity stat
+    expect(stocks.sd).toBeCloseTo(0.174, 2);
+    const bonds = portfolioStats(0);
+    const blend = portfolioStats(0.8);
+    expect(blend.mean).toBeCloseTo(0.8 * stocks.mean + 0.2 * bonds.mean, 10); // mean is linear
+    expect(blend.sd).toBeLessThan(stocks.sd); // diversification lowers σ
+  });
+
+  it('drawdown starts after the LAST saving year — one-off blips do not trigger it', () => {
+    // Demo: down payment at 38 (blip), downshift deficit from 50, retirement input 55.
+    const proj = project(seedPlan(START_YEAR), fixedReturns(0.05));
+    expect(drawdownStartAge(proj)).toBe(50);
+  });
+
+  it('savings rate = saved ÷ after-tax income; null without income', () => {
+    const p = bare();
+    p.incomes = [{ id: 'w', name: 'Job', kind: 'w2', annual: 100_000, startAge: 40, endAge: 59, growth: 0 }];
+    expect(savingsRate(project(p, fixedReturns(0)).rows[0])).toBeCloseTo(1, 6); // no spending → saves it all
+
+    const noIncome = bare();
+    noIncome.expenses.currentAnnual = 40_000;
+    expect(savingsRate(project(noIncome, fixedReturns(0)).rows[0])).toBeNull();
   });
 });
 

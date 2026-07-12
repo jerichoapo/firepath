@@ -11,7 +11,7 @@ import {
 import type { McResult } from '../engine/montecarlo';
 import { project } from '../engine/projection';
 import { fixedReturns } from '../engine/returns';
-import type { PlanInput, ProjectionResult, Scenario } from '../engine/types';
+import type { McMode, PlanInput, ProjectionResult, Scenario } from '../engine/types';
 import { isIncomplete, planIssues, type PlanIssue } from '../engine/validate';
 import type { SimRequest, SimResponse } from '../workers/sim.worker';
 import { usePlanStore } from './PlanContext';
@@ -125,6 +125,45 @@ export function useSim(): SimState {
   const ctx = useContext(Ctx);
   if (!ctx) throw new Error('useSim outside SimProvider');
   return ctx;
+}
+
+/**
+ * Monte Carlo result for the OTHER return mode (the reconciliation card shows both).
+ * Uses the same cache key shape as the main flow, so toggling the mode Segmented is
+ * then served instantly from cache.
+ */
+export function useAltMc(): { mode: McMode; result: McResult | null } {
+  const { active, plan } = usePlanStore();
+  const altMode: McMode = plan.mc.mode === 'normal' ? 'bootstrap' : 'normal';
+  const key = `${active.id}:${active.updatedAt}:${plan.mc.runs}:${altMode}`;
+  const [result, setResult] = useState<McResult | null>(null);
+
+  useEffect(() => {
+    const cached = mcCache.get(key);
+    setResult(cached ?? null);
+    if (cached) return;
+
+    let reqId = 0;
+    const onMessage = (e: MessageEvent<SimResponse>) => {
+      const msg = e.data;
+      if (msg.kind === 'mc' && msg.id === reqId) {
+        remember(mcCache, key, msg.result);
+        setResult(msg.result);
+      }
+    };
+    getSimWorker().addEventListener('message', onMessage);
+    const timer = window.setTimeout(() => {
+      reqId = postSim({ kind: 'mc', plan: { ...plan, mc: { ...plan.mc, mode: altMode } }, channel: 'alt' });
+    }, 400);
+    return () => {
+      clearTimeout(timer);
+      getSimWorker().removeEventListener('message', onMessage);
+    };
+    // `key` encodes everything the request depends on (scenario version, runs, mode).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  return { mode: altMode, result };
 }
 
 const scenarioKey = (s: Scenario) => `${s.id}:${s.updatedAt}:${s.plan.mc.runs}:${s.plan.mc.mode}`;

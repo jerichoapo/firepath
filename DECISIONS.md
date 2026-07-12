@@ -163,3 +163,17 @@ of engine cost. Everything else in D16 stands: one RMD clock, one penalty age, o
 retirement age — full dual-person tracking remains out of scope. The downshift-age input
 moved from Household to the Milestones card and is labeled as a timeline marker, which is
 all it ever was.
+
+## D22. Timeline bands are flow-derived; every success number names its return model
+The Saving / Drawing-down split is the year AFTER the last net-saving year (saved >
+withdrawn + $1), so a one-off expense year (a down payment) doesn't start the drawdown
+band early, and a downshift that quietly goes cash-flow-negative before the "retirement
+age" input does (the demo: 50, not 55) is shown honestly. On reconciliation generally:
+the header success chip names its model ("Success · normal MC"), the Monte Carlo view
+carries an "About these numbers" table showing normal MC / bootstrap MC / backtest side
+by side with their return sources (the alternate MC mode is computed on demand and shares
+the main result cache, so toggling modes is instant), the net-worth chart draws the
+dashed "Invested (excl. cash)" line the FI number actually compares against, and the
+Assumptions card quotes the historical mean/σ at the chosen allocation next to the user's
+own μ/σ. Divergence between the three numbers is presented as information (assumptions vs
+history), never hidden.
