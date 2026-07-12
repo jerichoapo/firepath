@@ -1,0 +1,74 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Chart + app color tokens (validated palette — see DECISIONS.md D13). */
+:root {
+  --c-page: #f9f9f7;
+  --c-surface: #fcfcfb;
+  --c-ink: #1b1b19;
+  --c-ink-2: #52514e;
+  --c-muted: #898781;
+  --c-grid: #e1e0d9;
+  --c-axis: #c3c2b7;
+  --c-border: rgba(11, 11, 11, 0.1);
+  --c-accent: #2a78d6;
+
+  --c-taxable: #2a78d6;
+  --c-trad: #1baf7a;
+  --c-roth: #eda100;
+  --c-hsa: #008300;
+  --c-cash: #4a3aa7;
+
+  --c-fan-outer: #b7d3f6;
+  --c-fan-inner: #86b6ef;
+  --c-median: #1c5cab;
+
+  --c-good: #006300;
+  --c-bad: #d03b3b;
+}
+
+.dark {
+  --c-page: #0d0d0d;
+  --c-surface: #1a1a19;
+  --c-ink: #f4f4f0;
+  --c-ink-2: #c3c2b7;
+  --c-muted: #898781;
+  --c-grid: #2c2c2a;
+  --c-axis: #383835;
+  --c-border: rgba(255, 255, 255, 0.1);
+  --c-accent: #3987e5;
+
+  --c-taxable: #3987e5;
+  --c-trad: #199e70;
+  --c-roth: #c98500;
+  --c-hsa: #008300;
+  --c-cash: #9085e9;
+
+  --c-fan-outer: #184f95;
+  --c-fan-inner: #256abf;
+  --c-median: #86b6ef;
+
+  --c-good: #0ca30c;
+  --c-bad: #e66767;
+}
+
+body {
+  background: var(--c-page);
+  color: var(--c-ink);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+
+/* Recharts text inherits fill from these helpers */
+.recharts-text {
+  fill: var(--c-muted);
+  font-size: 11px;
+}
+.recharts-cartesian-axis-line,
+.recharts-cartesian-axis-tick-line {
+  stroke: var(--c-axis);
+}
+
+input[type='range'] {
+  accent-color: var(--c-accent);
+}

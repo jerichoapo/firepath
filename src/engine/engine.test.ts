@@ -1,0 +1,258 @@
+import { describe, expect, it } from 'vitest';
+import { runBacktest } from './backtest';
+import { HISTORICAL } from './data/historical';
+import { coastNumberAt, fiAge, fiNumber, isCoastFireNow } from './metrics';
+import { runMonteCarlo } from './montecarlo';
+import { project, spendingAtAge } from './projection';
+import { bootstrapReturns, fixedReturns, historicalPortfolio, mulberry32 } from './returns';
+import { bracketTax, federalTax, ltcgTax, payrollTax } from './tax';
+import { FEDERAL_2026 } from './taxConfig';
+import { blankPlan, seedPlan } from './seed';
+import type { PlanInput } from './types';
+
+const START_YEAR = 2026;
+
+/** A plan with every flow zeroed except what the test sets. */
+function bare(overrides: Partial<PlanInput> = {}): PlanInput {
+  const p = blankPlan(START_YEAR);
+  p.profile = { currentAge: 40, partnerAge: null, downshiftAge: 50, retireAge: 60, lifeExpectancy: 70 };
+  return { ...p, ...overrides };
+}
+
+describe('tax math', () => {
+  it('bracketTax matches a hand-computed 2026 single case', () => {
+    // 12,400×10% + (50,000−12,400)×12% = 5,752
+    expect(bracketTax(50_000, FEDERAL_2026.ordinaryBrackets.single)).toBeCloseTo(5_752, 5);
+  });
+
+  it('LTCG stacks on top of ordinary income', () => {
+    const b = FEDERAL_2026.ltcgBrackets.single;
+    expect(ltcgTax(0, 40_000, b)).toBe(0); // inside the 0% band
+    expect(ltcgTax(100_000, 20_000, b)).toBeCloseTo(3_000, 5); // fully in 15%
+  });
+
+  it('standard deduction shelters ordinary income first, remainder shelters gains', () => {
+    // ordinary 10k (< 16.1k deduction) leaves 6.1k to shelter gains:
+    // taxable gains 53.9k → (53,900 − 49,450) × 15% = 667.50
+    expect(federalTax({ ordinaryIncome: 10_000, ltcgIncome: 60_000 }, 'single')).toBeCloseTo(667.5, 2);
+  });
+
+  it('payroll tax caps OASDI and computes SE tax', () => {
+    const { fica } = payrollTax(200_000, 0);
+    expect(fica).toBeCloseTo(184_500 * 0.062 + 200_000 * 0.0145, 2);
+    const se = payrollTax(0, 10_000);
+    expect(se.fica).toBeCloseTo(10_000 * 0.9235 * 0.153, 2);
+    expect(se.halfSeDeduction).toBeCloseTo(se.fica / 2, 6);
+  });
+});
+
+describe('deterministic projection', () => {
+  it('matches closed-form compound growth with no flows', () => {
+    const p = bare();
+    p.accounts.taxable.balance = 100_000;
+    const proj = project(p, fixedReturns(0.05));
+    // 31 simulated years (ages 40..70 inclusive)
+    expect(proj.rows).toHaveLength(31);
+    proj.rows.forEach((row, i) => {
+      expect(row.balances.taxable).toBeCloseTo(100_000 * 1.05 ** (i + 1), 6);
+    });
+    expect(proj.failedAtAge).toBeNull();
+  });
+
+  it('start-of-year contributions earn the full year: B1 = (B0 + c)·(1+r)', () => {
+    const p = bare();
+    p.accounts.taxable = { balance: 100_000, contribution: 10_000 };
+    // Plenty of income to fund the contribution; expenses zero.
+    p.incomes = [{ id: 'w', name: 'w', kind: 'w2', annual: 50_000, startAge: 40, endAge: 59, growth: 0 }];
+    const proj = project(p, fixedReturns(0.05));
+    const r0 = proj.rows[0];
+    expect(r0.contributions.taxable).toBeCloseTo(10_000, 6);
+    // Internal consistency: end balance = (start + contribution + leftover sweep) × 1.05
+    expect(r0.balances.taxable).toBeCloseTo((100_000 + 10_000 + r0.leftoverToTaxable) * 1.05, 6);
+    // Leftover = income − taxes − contribution
+    expect(r0.leftoverToTaxable).toBeCloseTo(50_000 - r0.taxes.total - 10_000, 4);
+  });
+
+  it('withdraws cash first, then taxable, tracking cost basis', () => {
+    const p = bare();
+    p.profile.currentAge = 60; // no early-withdrawal penalties
+    p.profile.retireAge = 60;
+    p.profile.lifeExpectancy = 62;
+    p.accounts.cash.balance = 20_000;
+    p.accounts.taxable.balance = 100_000;
+    p.taxableCostBasis = 50_000;
+    p.expenses.currentAnnual = 50_000;
+    const proj = project(p, fixedReturns(0));
+    const r0 = proj.rows[0];
+    expect(r0.withdrawals.cash).toBeCloseTo(20_000, 2);
+    // Realized gains ≈ 15k — inside the single 0% LTCG band → no tax, no gross-up.
+    expect(r0.taxes.total).toBeCloseTo(0, 2);
+    expect(r0.withdrawals.taxable).toBeCloseTo(30_000, 2);
+    expect(r0.balances.taxable).toBeCloseTo(70_000, 2);
+  });
+
+  it('grosses up tax-deferred withdrawals for ordinary income tax (hand-solved)', () => {
+    const p = bare();
+    p.profile.currentAge = 65;
+    p.profile.retireAge = 65;
+    p.profile.lifeExpectancy = 66;
+    p.accounts.trad.balance = 1_000_000;
+    p.expenses.currentAnnual = 60_000;
+    const proj = project(p, fixedReturns(0));
+    // Fixed point: W = 60,000 + tax(W−16,100) ⇒ W = 65,704.55 in the 12% bracket.
+    expect(proj.rows[0].withdrawals.trad).toBeCloseTo(65_704.55, 0);
+    expect(proj.rows[0].taxes.federal).toBeCloseTo(5_704.55, 0);
+  });
+
+  it('applies the 10% penalty to early tax-deferred withdrawals', () => {
+    const p = bare();
+    p.profile.currentAge = 50;
+    p.profile.retireAge = 50;
+    p.profile.lifeExpectancy = 51;
+    p.accounts.trad.balance = 1_000_000;
+    p.expenses.currentAnnual = 60_000;
+    const proj = project(p, fixedReturns(0));
+    const r0 = proj.rows[0];
+    expect(r0.taxes.penalties).toBeCloseTo(r0.withdrawals.trad * 0.1, 2);
+  });
+
+  it('lets Roth contribution basis out early without tax, then taxes earnings', () => {
+    const p = bare();
+    p.profile.currentAge = 50;
+    p.profile.retireAge = 50;
+    p.profile.lifeExpectancy = 52;
+    p.accounts.roth.balance = 100_000;
+    p.rothBasis = 55_000;
+    p.expenses.currentAnnual = 50_000;
+    p.tax.withdrawalOrder = ['roth', 'taxable', 'trad', 'hsa'];
+    const proj = project(p, fixedReturns(0));
+    // Year 1: 50k of basis out — tax-free, no penalty.
+    expect(proj.rows[0].taxes.total).toBeCloseTo(0, 2);
+    // Year 2: 5k basis left; the rest is earnings → ordinary tax (below deduction ⇒ 0) + 10% penalty.
+    const r1 = proj.rows[1];
+    const earnings = r1.withdrawals.roth - 5_000;
+    expect(earnings).toBeGreaterThan(40_000);
+    expect(r1.taxes.penalties).toBeCloseTo(earnings * 0.1, 2);
+  });
+
+  it('forces RMDs at the SECURE-2.0 age and sweeps the excess to taxable', () => {
+    const p = bare();
+    p.profile.currentAge = 75; // born 1951 ⇒ RMD age 73, already past it
+    p.profile.retireAge = 75;
+    p.profile.lifeExpectancy = 76;
+    p.accounts.trad.balance = 246_000; // divisor at 75 = 24.6 ⇒ RMD = 10,000
+    const proj = project(p, fixedReturns(0));
+    const r0 = proj.rows[0];
+    expect(r0.rmd).toBeCloseTo(10_000, 2);
+    expect(r0.balances.trad).toBeCloseTo(236_000, 2);
+    // No spending: RMD minus tax (0 — below deduction) sweeps into taxable.
+    expect(r0.balances.taxable).toBeCloseTo(10_000, 2);
+  });
+
+  it('marks failure when spending cannot be funded', () => {
+    const p = bare();
+    p.accounts.taxable.balance = 150_000;
+    p.expenses.currentAnnual = 100_000;
+    const proj = project(p, fixedReturns(0));
+    expect(proj.failedAtAge).toBe(41); // 150k funds year 1 and part of year 2
+    expect(proj.rows.at(-1)!.netWorth).toBe(0);
+  });
+
+  it('spendingAtAge respects phases', () => {
+    const p = bare();
+    p.expenses.currentAnnual = 70_000;
+    p.expenses.phases = [
+      { id: 'a', fromAge: 55, annual: 80_000 },
+      { id: 'b', fromAge: 70, annual: 65_000 },
+    ];
+    expect(spendingAtAge(p, 40)).toBe(70_000);
+    expect(spendingAtAge(p, 55)).toBe(80_000);
+    expect(spendingAtAge(p, 69)).toBe(80_000);
+    expect(spendingAtAge(p, 85)).toBe(65_000);
+  });
+});
+
+describe('FI metrics', () => {
+  it('computes FI number and Coast FIRE analytically', () => {
+    const p = bare();
+    p.profile = { currentAge: 35, partnerAge: null, downshiftAge: 50, retireAge: 55, lifeExpectancy: 90 };
+    p.expenses.currentAnnual = 40_000;
+    p.accounts.taxable.balance = 500_000;
+    expect(fiNumber(p)).toBe(1_000_000);
+    // Coast number at 35 = 1M / 1.05^20 = 376,889.48
+    expect(coastNumberAt(p, 35)).toBeCloseTo(1_000_000 / 1.05 ** 20, 4);
+    expect(isCoastFireNow(p)).toBe(true);
+  });
+
+  it('finds the FI age from a projection', () => {
+    const p = bare();
+    p.profile = { currentAge: 40, partnerAge: null, downshiftAge: 50, retireAge: 60, lifeExpectancy: 70 };
+    p.expenses.currentAnnual = 0;
+    p.expenses.phases = [{ id: 'r', fromAge: 60, annual: 20_000 }];
+    p.accounts.taxable.balance = 400_000;
+    // FI number = 500k; 400k×1.05^t ≥ 500k ⇒ t = 5 (1.05^5 = 1.276 → 510.5k)
+    const proj = project(p, fixedReturns(0.05));
+    expect(fiNumber(p)).toBe(500_000);
+    expect(fiAge(p, proj)).toBe(44); // row for age 44 is the 5th year-end
+  });
+});
+
+describe('Monte Carlo', () => {
+  it('is deterministic for a fixed seed and produces ordered bands', () => {
+    const p = seedPlan(START_YEAR);
+    p.mc.runs = 500;
+    const a = runMonteCarlo(p, { seed: 42 });
+    const b = runMonteCarlo(p, { seed: 42 });
+    expect(a.successRate).toBe(b.successRate);
+    expect(a.bands[50]).toEqual(b.bands[50]);
+    expect(a.successRate).toBeGreaterThan(0);
+    expect(a.successRate).toBeLessThanOrEqual(1);
+    for (let i = 0; i < a.ages.length; i++) {
+      expect(a.bands[10][i]).toBeLessThanOrEqual(a.bands[25][i]);
+      expect(a.bands[25][i]).toBeLessThanOrEqual(a.bands[50][i]);
+      expect(a.bands[50][i]).toBeLessThanOrEqual(a.bands[75][i]);
+      expect(a.bands[75][i]).toBeLessThanOrEqual(a.bands[90][i]);
+    }
+  });
+
+  it('a certain-failure plan has 0% success; a fully-funded plan 100%', () => {
+    const broke = bare();
+    broke.expenses.currentAnnual = 100_000; // no income, no assets
+    expect(runMonteCarlo(broke, { runs: 500, seed: 1 }).successRate).toBe(0);
+
+    const rich = bare();
+    rich.accounts.taxable.balance = 10_000_000;
+    rich.expenses.currentAnnual = 50_000;
+    expect(runMonteCarlo(rich, { runs: 500, seed: 1 }).successRate).toBe(1);
+  });
+
+  it('bootstrap mode draws only values present in the historical portfolio', () => {
+    const portfolio = historicalPortfolio(0.8);
+    const set = new Set(portfolio.map((x) => x.toFixed(12)));
+    const gen = bootstrapReturns(portfolio, 60, mulberry32(7));
+    for (let i = 0; i < 60; i++) expect(set.has(gen(i).toFixed(12))).toBe(true);
+  });
+});
+
+describe('backtest', () => {
+  it('runs one start per historical year with enough remaining data', () => {
+    const p = seedPlan(START_YEAR); // ages 35..92 ⇒ 58-year horizon
+    const bt = runBacktest(p);
+    expect(bt.horizonYears).toBe(58);
+    expect(bt.starts).toHaveLength(HISTORICAL.length - 58 + 1);
+    expect(bt.starts[0].startYear).toBe(1871);
+    expect(bt.starts.at(-1)!.startYear).toBe(1871 + bt.starts.length - 1);
+    expect(bt.successRate).toBeGreaterThan(0);
+    expect(bt.worst.length).toBeLessThanOrEqual(10);
+  });
+
+  it('historical data is complete and sane', () => {
+    expect(HISTORICAL).toHaveLength(154);
+    for (const h of HISTORICAL) {
+      expect(h.stock).toBeGreaterThan(-0.6);
+      expect(h.stock).toBeLessThan(0.7);
+      expect(h.bond).toBeGreaterThan(-0.4);
+      expect(h.bond).toBeLessThan(0.5);
+    }
+  });
+});

@@ -1,0 +1,46 @@
+// IndexedDB persistence via Dexie. Two tables: full scenario rows + a meta row
+// for the active scenario id. All data stays on this machine.
+
+import Dexie, { type EntityTable } from 'dexie';
+import { makeScenario, seedPlan } from '../engine/seed';
+import type { Scenario } from '../engine/types';
+
+interface MetaRow {
+  key: string;
+  value: string;
+}
+
+export const db = new Dexie('firepath') as Dexie & {
+  scenarios: EntityTable<Scenario, 'id'>;
+  meta: EntityTable<MetaRow, 'key'>;
+};
+
+db.version(1).stores({ scenarios: 'id', meta: 'key' });
+
+export interface StoreState {
+  scenarios: Scenario[];
+  activeId: string;
+}
+
+/** Load everything, seeding the demo plan on first run. */
+export async function loadStore(): Promise<StoreState> {
+  let scenarios = await db.scenarios.toArray();
+  if (scenarios.length === 0) {
+    const seed = makeScenario('Base Plan', seedPlan(new Date().getFullYear()));
+    await db.scenarios.put(seed);
+    await db.meta.put({ key: 'activeId', value: seed.id });
+    scenarios = [seed];
+  }
+  const activeId = (await db.meta.get('activeId'))?.value ?? scenarios[0].id;
+  const active = scenarios.some((s) => s.id === activeId) ? activeId : scenarios[0].id;
+  return { scenarios, activeId: active };
+}
+
+/** Persist the whole store (scenarios are small; simplicity wins). */
+export async function saveStore(state: StoreState): Promise<void> {
+  await db.transaction('rw', db.scenarios, db.meta, async () => {
+    await db.scenarios.clear();
+    await db.scenarios.bulkPut(state.scenarios);
+    await db.meta.put({ key: 'activeId', value: state.activeId });
+  });
+}
