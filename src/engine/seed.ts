@@ -53,11 +53,14 @@ export function seedPlan(startYear: number): PlanInput {
     ...blankPlan(startYear),
     profile: { currentAge: 35, partnerAge: 34, downshiftAge: 50, retireAge: 55, lifeExpectancy: 92 },
     accounts: {
-      taxable: { balance: 120_000, contribution: 18_000 },
+      // After-tax contributions are sized to fit the household's actual surplus, so the
+      // funded-vs-planned footer (D28) warns only where the story explains it: the down
+      // payment year and the part-time years — not on every ordinary year.
+      taxable: { balance: 120_000, contribution: 12_000 },
       // The 401(k) schedule demos D28, matching the part-time downshift income at 50:
       // full contributions while both salaries run, a lighter level in the coast years.
       trad: { balance: 210_000, contribution: 32_000, changes: [{ id: uid(), fromAge: 50, annual: 10_000 }] },
-      roth: { balance: 60_000, contribution: 14_000 },
+      roth: { balance: 60_000, contribution: 7_000 },
       hsa: { balance: 18_000, contribution: 8_000 },
       cash: { balance: 30_000, contribution: 0 },
     },
