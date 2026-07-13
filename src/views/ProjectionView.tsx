@@ -3,10 +3,12 @@
 import { NetWorthArea } from '../components/charts/NetWorthArea';
 import { Card } from '../components/ui';
 import { fmtCompact } from '../lib/format';
+import { useNav } from '../store/NavContext';
 import { useSim } from '../store/SimContext';
 
 export function ProjectionView() {
   const { plan, proj, fiN, fiAgeVal, coastAgeVal } = useSim();
+  const { goToCashFlow } = useNav();
 
   return (
     <div className="grid grid-cols-1 gap-4">
@@ -23,7 +25,7 @@ export function ProjectionView() {
         <NetWorthArea proj={proj} fiN={fiN} fiAgeVal={fiAgeVal} retireAge={plan.profile.retireAge} height={380} />
       </Card>
 
-      <Card title="Year by year" subtitle="Every simulated year — income, taxes, flows, balances (today's $)">
+      <Card title="Year by year" subtitle="Every simulated year — income, taxes, flows, balances (today's $). Click a row for that year's cash flow.">
         <div className="max-h-[420px] overflow-auto">
           <table className="w-full min-w-[860px] border-collapse text-right text-xs tabular-nums">
             <thead className="sticky top-0 bg-[var(--c-surface)]">
@@ -45,10 +47,20 @@ export function ProjectionView() {
                 return (
                   <tr
                     key={r.age}
-                    className={`border-b border-[var(--c-grid)]/60 hover:bg-[var(--c-grid)]/30 ${r.failed ? 'text-[var(--c-bad)]' : ''}`}
+                    onClick={() => goToCashFlow(r.age)}
+                    className={`cursor-pointer border-b border-[var(--c-grid)]/60 hover:bg-[var(--c-grid)]/30 ${r.failed ? 'text-[var(--c-bad)]' : ''}`}
                   >
                     <td className="py-1.5 pr-3 text-left font-medium">
-                      {r.age} · {r.year}
+                      {/* Keyboard path for the row's cross-link (the row click is mouse-only). */}
+                      <button
+                        type="button"
+                        aria-label={`View cash flow at age ${r.age}`}
+                        title={`View cash flow at age ${r.age}`}
+                        className="rounded hover:text-[var(--c-accent)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--c-accent)]"
+                        onClick={() => goToCashFlow(r.age)}
+                      >
+                        {r.age} · {r.year}
+                      </button>
                       {r.age === fiAgeVal && ' 🔥'}
                       {r.age === plan.profile.retireAge && ' 🏝️'}
                       {r.failed && ' ⚠'}

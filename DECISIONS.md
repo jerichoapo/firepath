@@ -224,3 +224,20 @@ two full-store resets require typing RESET, because a wipe must not feel like a 
 delete; import errors surface as a toast. Stress presets (SS −25%, returns −1%,
 spending +10%) duplicate the active scenario with the tweak applied and a suffixed name —
 pure showcases of the existing compare machinery.
+
+## D26. Charts answer the follow-up question; randomness is honest and session-only
+Monte Carlo now reports *when* failures happen, not just how many: `McResult.failuresByAge`
+(counted in the accumulator at zero extra simulation cost) drives a thin red "if it fails,
+when" strip under the fan chart with the failure share and peak failure age — on the demo
+it peaks at 66, one year before Social Security starts, which is exactly the kind of
+insight a lone success percentage hides. Every dense chart has a Chart | Table toggle (fan
+percentiles by age, histogram bins as ranges — F21's "$1.2M – $1.5M" labels come from the
+same buildBins the chart uses — and every backtest start year); Sankey labels truncate at
+18 chars with the full name in an SVG <title> and the tooltip (F20). Cross-navigation:
+the Cash Flow view's selected age lives in NavContext, so projection rows (keyboard-
+reachable buttons) and timeline milestones (focusable SVG markers, pointer-events:
+bounding-box for a real hit target) jump straight to "what happened that year" (F22).
+The 🎲 "new draw" bumps the MC seed in SimContext state only — reload always returns to
+the fixed DEFAULT_SEED, so shared plans and tests stay reproducible while curiosity about
+seed-luck gets a one-click answer (F10). Compare/alt cache keys carry the seed suffix so
+the P3 cache-sharing symmetry survives.

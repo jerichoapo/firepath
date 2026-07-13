@@ -22,6 +22,8 @@ export interface McResult {
   /** Final net worth of every run (for the outcome distribution). */
   finalNetWorths: number[];
   medianFinal: number;
+  /** failuresByAge[i] = runs that ran out of money at ages[i]; sums to runs − successes. */
+  failuresByAge: number[];
 }
 
 export interface McAccumulator {
@@ -30,6 +32,7 @@ export interface McAccumulator {
   perYear: number[][];
   finals: number[];
   successes: number;
+  failuresByAge: number[];
 }
 
 export function mcInit(plan: PlanInput, runs?: number, seed = DEFAULT_SEED): McAccumulator {
@@ -41,6 +44,7 @@ export function mcInit(plan: PlanInput, runs?: number, seed = DEFAULT_SEED): McA
     perYear: Array.from({ length: horizon }, () => new Array<number>(n)),
     finals: new Array<number>(n),
     successes: 0,
+    failuresByAge: new Array<number>(horizon).fill(0),
   };
 }
 
@@ -57,6 +61,7 @@ export function mcRun(plan: PlanInput, acc: McAccumulator, from: number, to: num
       : normalReturns(expReturn, returnSd, rng);
     const proj = project(plan, gen);
     if (proj.failedAtAge === null) acc.successes++;
+    else acc.failuresByAge[proj.failedAtAge - plan.profile.currentAge]++;
     acc.finals[i] = proj.finalNetWorth;
     for (let y = 0; y < horizon; y++) acc.perYear[y][i] = proj.rows[y].netWorth;
   }
@@ -76,6 +81,7 @@ export function mcFinish(plan: PlanInput, acc: McAccumulator): McResult {
     ages: acc.perYear.map((_, i) => plan.profile.currentAge + i),
     finalNetWorths: acc.finals,
     medianFinal: quantileOfSorted(sortedFinals, 0.5),
+    failuresByAge: acc.failuresByAge,
   };
 }
 

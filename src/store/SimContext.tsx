@@ -8,7 +8,7 @@ import type { BacktestResult } from '../engine/backtest';
 import {
   allMilestones, coastFireAge, currentNetWorth, fiAge, fiNumber, isCoastFireNow, type Milestone,
 } from '../engine/metrics';
-import type { McResult } from '../engine/montecarlo';
+import { DEFAULT_SEED, type McResult } from '../engine/montecarlo';
 import { project } from '../engine/projection';
 import { fixedReturns } from '../engine/returns';
 import type { McMode, PlanInput, ProjectionResult, Scenario } from '../engine/types';
@@ -23,7 +23,10 @@ export function getSimWorker(): Worker {
   return worker;
 }
 
-export function postSim(req: Omit<SimRequest, 'id'>): number {
+// Distributes over the request union — a plain Omit would drop per-kind fields like `seed`.
+type WithoutId<T> = T extends unknown ? Omit<T, 'id'> : never;
+
+export function postSim(req: WithoutId<SimRequest>): number {
   const id = nextId++;
   getSimWorker().postMessage({ ...req, id });
   return id;
@@ -57,13 +60,17 @@ export interface SimState {
   backtest: BacktestResult | null;
   /** True when `backtest` doesn't yet reflect the current plan. */
   btComputing: boolean;
+  /** Monte Carlo seed. Session-only: 🎲 bumps it, reload returns to DEFAULT_SEED (F10/D26). */
+  seed: number;
+  rerollSeed: () => void;
 }
 
 const Ctx = createContext<SimState | null>(null);
 
 export function SimProvider({ children }: { children: ReactNode }) {
   const { active, plan } = usePlanStore();
-  const version = `${active.id}:${active.updatedAt}:${plan.mc.runs}:${plan.mc.mode}`;
+  const [seed, setSeed] = useState(DEFAULT_SEED);
+  const version = `${active.id}:${active.updatedAt}:${plan.mc.runs}:${plan.mc.mode}:${seed}`;
 
   const deterministic = useMemo(() => {
     const proj = project(plan, fixedReturns(plan.assumptions.expReturn));
@@ -118,18 +125,21 @@ export function SimProvider({ children }: { children: ReactNode }) {
     };
     getSimWorker().addEventListener('message', onMessage);
     const timer = window.setTimeout(() => {
-      if (!cachedMc) mcId = postSim({ kind: 'mc', plan });
+      if (!cachedMc) mcId = postSim({ kind: 'mc', plan, seed });
       if (!cachedBt) btId = postSim({ kind: 'backtest', plan });
     }, 400);
     return () => {
       clearTimeout(timer);
       getSimWorker().removeEventListener('message', onMessage);
     };
-  }, [version, plan]);
+  }, [version, plan, seed]);
 
   const value = useMemo<SimState>(
-    () => ({ plan, ...deterministic, mc, mcProgress, mcComputing: !mcDone, backtest, btComputing: !btDone }),
-    [plan, deterministic, mc, mcProgress, mcDone, backtest, btDone],
+    () => ({
+      plan, ...deterministic, mc, mcProgress, mcComputing: !mcDone, backtest, btComputing: !btDone,
+      seed, rerollSeed: () => setSeed((s) => s + 1),
+    }),
+    [plan, deterministic, mc, mcProgress, mcDone, backtest, btDone, seed],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -147,8 +157,9 @@ export function useSim(): SimState {
  */
 export function useAltMc(): { mode: McMode; result: McResult | null } {
   const { active, plan } = usePlanStore();
+  const { seed } = useSim();
   const altMode: McMode = plan.mc.mode === 'normal' ? 'bootstrap' : 'normal';
-  const key = `${active.id}:${active.updatedAt}:${plan.mc.runs}:${altMode}`;
+  const key = `${active.id}:${active.updatedAt}:${plan.mc.runs}:${altMode}:${seed}`;
   const [result, setResult] = useState<McResult | null>(null);
 
   useEffect(() => {
@@ -166,7 +177,7 @@ export function useAltMc(): { mode: McMode; result: McResult | null } {
     };
     getSimWorker().addEventListener('message', onMessage);
     const timer = window.setTimeout(() => {
-      reqId = postSim({ kind: 'mc', plan: { ...plan, mc: { ...plan.mc, mode: altMode } }, channel: 'alt' });
+      reqId = postSim({ kind: 'mc', plan: { ...plan, mc: { ...plan.mc, mode: altMode } }, seed, channel: 'alt' });
     }, 400);
     return () => {
       clearTimeout(timer);
@@ -179,7 +190,9 @@ export function useAltMc(): { mode: McMode; result: McResult | null } {
   return { mode: altMode, result };
 }
 
-const scenarioKey = (s: Scenario) => `${s.id}:${s.updatedAt}:${s.plan.mc.runs}:${s.plan.mc.mode}`;
+// Compare always uses the fixed default seed; the suffix keeps these keys shape-identical
+// with the main flow's so results are shared whenever the session seed is the default.
+const scenarioKey = (s: Scenario) => `${s.id}:${s.updatedAt}:${s.plan.mc.runs}:${s.plan.mc.mode}:${DEFAULT_SEED}`;
 
 /** Monte Carlo results for many scenarios at once (compare view), cached + progressive. */
 export function useScenarioMcs(scenarios: Scenario[]): Record<string, McResult | null> {

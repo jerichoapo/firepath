@@ -371,3 +371,24 @@ describe('scenario identity colors', () => {
     expect(nextColor([...SCENARIO_COLORS])).toBe(SCENARIO_COLORS[0]);
   });
 });
+
+describe('failure timing (failuresByAge)', () => {
+  it('bins every failure at the exact failure age when paths are deterministic', () => {
+    const p = bare();
+    p.accounts.taxable.balance = 150_000;
+    p.expenses.currentAnnual = 100_000;
+    p.assumptions.expReturn = 0;
+    p.assumptions.returnSd = 0; // σ = 0 ⇒ every run follows the same path, failing at 41
+    const mc = runMonteCarlo(p, { runs: 600 });
+    expect(mc.successRate).toBe(0);
+    expect(mc.failuresByAge[41 - p.profile.currentAge]).toBe(600);
+    expect(mc.failuresByAge.reduce((s, x) => s + x, 0)).toBe(600);
+  });
+
+  it('failures sum to runs − successes on the demo plan', () => {
+    const mc = runMonteCarlo(seedPlan(START_YEAR), { runs: 500 });
+    const failures = mc.failuresByAge.reduce((s, x) => s + x, 0);
+    expect(failures).toBe(Math.round(mc.runs * (1 - mc.successRate)));
+    expect(mc.failuresByAge).toHaveLength(mc.ages.length);
+  });
+});

@@ -51,12 +51,13 @@ test('the fan chart stays mounted, dimmed, while simulations recompute', async (
   const fan = page.locator('section').filter({ hasText: 'Net worth percentile bands' });
   const histogram = page.locator('section').filter({ hasText: 'Distribution of ending net worth' });
   await expect(gauge.getByText(/^[\d.]+%$/)).toBeVisible({ timeout: 20_000 });
-  await expect(fan.locator('.recharts-responsive-container')).toBeVisible();
+  // .first(): the card also hosts the failure strip's chart container (Phase 7).
+  await expect(fan.locator('.recharts-responsive-container').first()).toBeVisible();
 
   await page.getByRole('textbox', { name: 'Trials' }).fill('4600');
 
   // Charts and gauge keep their (stale) content — no collapse into a progress screen.
-  await expect(fan.locator('.recharts-responsive-container')).toBeVisible();
+  await expect(fan.locator('.recharts-responsive-container').first()).toBeVisible();
   await expect(histogram.locator('.recharts-responsive-container')).toBeVisible();
   await expect(gauge.getByText(/^[\d.]+%$/)).toBeVisible();
   await expect(gauge.getByText(/Computing/)).not.toBeVisible();

@@ -1,17 +1,20 @@
 // Monte Carlo: success gauge, percentile fan chart, and final-outcome distribution.
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Area, Bar, BarChart, CartesianGrid, ComposedChart, Line, ReferenceLine,
   ResponsiveContainer, Tooltip, XAxis, YAxis, type TooltipProps,
 } from 'recharts';
-import { MC_MAX_RUNS, MC_MIN_RUNS, quantileOfSorted, type McResult } from '../engine/montecarlo';
+import { DEFAULT_SEED, MC_MAX_RUNS, MC_MIN_RUNS, quantileOfSorted, type McResult } from '../engine/montecarlo';
 import { portfolioStats } from '../engine/returns';
 import { fmtCompact, fmtPct, fmtUSD } from '../lib/format';
 import { axisProps, gridProps, moneyAxis } from '../components/charts/chartTheme';
-import { Card, Empty, NumField, Segmented } from '../components/ui';
+import { Btn, Card, Empty, NumField, Segmented } from '../components/ui';
 import { usePlanStore } from '../store/PlanContext';
 import { useAltMc, useSim } from '../store/SimContext';
+
+type ViewMode = 'chart' | 'table';
+const VIEW_OPTIONS = [{ value: 'chart' as const, label: 'Chart' }, { value: 'table' as const, label: 'Table' }];
 
 function FanTip({ active, label, payload }: TooltipProps<number, string>) {
   const row = payload?.[0]?.payload as { p50: number; outer: [number, number]; inner: [number, number] } | undefined;
@@ -61,34 +64,42 @@ function FanChart({ mc, retireAge }: { mc: McResult; retireAge: number }) {
   );
 }
 
-function OutcomeHistogram({ finals }: { finals: number[] }) {
-  const data = useMemo(() => {
-    const sorted = [...finals].sort((a, b) => a - b);
-    const lo = Math.min(0, sorted[0]);
-    const hi = Math.max(1, quantileOfSorted(sorted, 0.95));
-    const BINS = 28;
-    const width = (hi - lo) / BINS;
-    const bins = Array.from({ length: BINS + 1 }, (_, i) => ({
-      x: lo + i * width,
-      label: i === BINS ? `≥ ${fmtCompact(hi)}` : fmtCompact(lo + i * width),
-      count: 0,
-    }));
-    for (const v of sorted) bins[Math.min(BINS, Math.floor((v - lo) / width))].count++;
-    return bins;
-  }, [finals]);
+interface Bin { x: number; label: string; range: string; count: number }
 
+/** Shared by the histogram chart, its tooltip, and the table view (F21/F29). */
+function buildBins(finals: number[]): Bin[] {
+  const sorted = [...finals].sort((a, b) => a - b);
+  const lo = Math.min(0, sorted[0]);
+  const hi = Math.max(1, quantileOfSorted(sorted, 0.95));
+  const BINS = 28;
+  const width = (hi - lo) / BINS;
+  const bins = Array.from({ length: BINS + 1 }, (_, i) => {
+    const x = lo + i * width;
+    const last = i === BINS;
+    return {
+      x,
+      label: last ? `≥ ${fmtCompact(hi)}` : fmtCompact(x),
+      range: last ? `≥ ${fmtCompact(hi)}` : `${fmtCompact(x)} – ${fmtCompact(x + width)}`,
+      count: 0,
+    };
+  });
+  for (const v of sorted) bins[Math.min(BINS, Math.floor((v - lo) / width))].count++;
+  return bins;
+}
+
+function OutcomeHistogram({ bins }: { bins: Bin[] }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <BarChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: 0 }} barCategoryGap={1}>
+      <BarChart data={bins} margin={{ top: 8, right: 12, bottom: 0, left: 0 }} barCategoryGap={1}>
         <CartesianGrid {...gridProps} />
-        <XAxis dataKey="label" {...axisProps} interval={Math.floor(data.length / 6)} tickMargin={6} />
+        <XAxis dataKey="label" {...axisProps} interval={Math.floor(bins.length / 6)} tickMargin={6} />
         <YAxis {...axisProps} width={40} allowDecimals={false} />
         <Tooltip
           cursor={{ fill: 'var(--c-grid)', fillOpacity: 0.4 }}
           content={({ active, payload }) =>
             active && payload?.[0] ? (
               <div className="rounded-lg border border-[var(--c-border)] bg-[var(--c-surface)] px-3 py-2 text-xs shadow-lg">
-                <p className="font-semibold">{(payload[0].payload as { label: string }).label}</p>
+                <p className="font-semibold">{(payload[0].payload as Bin).range}</p>
                 <p className="text-[var(--c-ink-2)]">{payload[0].value} runs end here</p>
               </div>
             ) : null
@@ -100,10 +111,101 @@ function OutcomeHistogram({ finals }: { finals: number[] }) {
   );
 }
 
+const tableHead = 'border-b border-[var(--c-border)] text-[10px] uppercase tracking-wide text-[var(--c-muted)]';
+
+function FanTable({ mc }: { mc: McResult }) {
+  return (
+    <div className="max-h-[360px] overflow-auto">
+      <table className="w-full text-right text-xs tabular-nums">
+        <thead className="sticky top-0 bg-[var(--c-surface)]">
+          <tr className={tableHead}>
+            <th className="py-2 text-left font-medium">Age</th>
+            <th className="font-medium">10th pct</th>
+            <th className="font-medium">25th pct</th>
+            <th className="font-medium">Median</th>
+            <th className="font-medium">75th pct</th>
+            <th className="font-medium">90th pct</th>
+          </tr>
+        </thead>
+        <tbody>
+          {mc.ages.map((age, i) => (
+            <tr key={age} className="border-b border-[var(--c-grid)]/60">
+              <td className="py-1 text-left font-medium">{age}</td>
+              {([10, 25, 50, 75, 90] as const).map((p) => (
+                <td key={p} className={p === 50 ? 'font-semibold' : ''}>{fmtCompact(mc.bands[p][i])}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function HistogramTable({ bins }: { bins: Bin[] }) {
+  return (
+    <div className="max-h-[220px] overflow-auto">
+      <table className="w-full text-right text-xs tabular-nums">
+        <thead className="sticky top-0 bg-[var(--c-surface)]">
+          <tr className={tableHead}>
+            <th className="py-2 text-left font-medium">Ending net worth</th>
+            <th className="font-medium">Runs</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bins.map((b) => (
+            <tr key={b.label} className="border-b border-[var(--c-grid)]/60">
+              <td className="py-1 text-left">{b.range}</td>
+              <td>{b.count}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** "If it fails, when" — failure counts by age, aligned under the fan chart (F26). */
+function FailureStrip({ mc }: { mc: McResult }) {
+  const total = mc.failuresByAge.reduce((s, x) => s + x, 0);
+  if (total === 0) return null;
+  const peakAge = mc.ages[mc.failuresByAge.indexOf(Math.max(...mc.failuresByAge))];
+  const data = mc.ages.map((age, i) => ({ age, fails: mc.failuresByAge[i] }));
+  return (
+    <div className="mt-2 border-t border-[var(--c-grid)]/60 pt-2">
+      <ResponsiveContainer width="100%" height={56}>
+        <BarChart data={data} margin={{ top: 2, right: 12, bottom: 0, left: 0 }} barCategoryGap={0.5}>
+          <XAxis dataKey="age" hide />
+          <YAxis width={52} tick={false} axisLine={false} tickLine={false} />
+          <Tooltip
+            cursor={{ fill: 'var(--c-grid)', fillOpacity: 0.4 }}
+            content={({ active, payload }) =>
+              active && payload?.[0] ? (
+                <div className="rounded-lg border border-[var(--c-border)] bg-[var(--c-surface)] px-3 py-2 text-xs shadow-lg">
+                  <p className="font-semibold">Age {(payload[0].payload as { age: number }).age}</p>
+                  <p className="text-[var(--c-ink-2)]">{payload[0].value} runs run out of money here</p>
+                </div>
+              ) : null
+            }
+          />
+          <Bar dataKey="fails" name="Runs failing" fill="var(--c-bad)" isAnimationActive={false} />
+        </BarChart>
+      </ResponsiveContainer>
+      <p className="mt-1 text-[11px] text-[var(--c-muted)]">
+        ▼ If it fails, when: <b className="text-[var(--c-bad)]">{fmtPct(total / mc.runs)}</b> of runs run out
+        of money; peak failure age <b className="text-[var(--c-ink)]">{peakAge}</b>.
+      </p>
+    </div>
+  );
+}
+
 export function MonteCarloView() {
   const { plan, update } = usePlanStore();
-  const { mc, mcProgress, mcComputing, incomplete, backtest } = useSim();
+  const { mc, mcProgress, mcComputing, incomplete, backtest, seed, rerollSeed } = useSim();
   const alt = useAltMc();
+  const [fanMode, setFanMode] = useState<ViewMode>('chart');
+  const [histMode, setHistMode] = useState<ViewMode>('chart');
+  const bins = useMemo(() => (mc ? buildBins(mc.finalNetWorths) : []), [mc]);
   // Stale results stay on screen at reduced opacity while the worker recomputes (F12/F14).
   const dim = `transition-opacity ${mcComputing ? 'opacity-50' : ''}`;
 
@@ -168,6 +270,14 @@ export function MonteCarloView() {
                 ? `Independent draws from N(${(plan.assumptions.expReturn * 100).toFixed(1)}%, ${(plan.assumptions.returnSd * 100).toFixed(1)}%) each year.`
                 : `Stitches random 5-year blocks of real ${Math.round(plan.assumptions.stockAllocation * 100)}/${Math.round((1 - plan.assumptions.stockAllocation) * 100)} stock/bond history (1871–2024), preserving momentum and multi-year streaks.`}
             </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <Btn onClick={rerollSeed} title="Same odds, new luck — draw a fresh set of random paths">🎲 New draw</Btn>
+              {seed !== DEFAULT_SEED && (
+                <span className="text-[11px] text-[var(--c-muted)]">
+                  draw #{seed - DEFAULT_SEED + 1} · session-only; reload restores the fixed draw
+                </span>
+              )}
+            </div>
           </div>
         </Card>
 
@@ -236,19 +346,28 @@ export function MonteCarloView() {
 
       {/* These cards never unmount once the view is open — a recompute dims them instead
           of collapsing the layout (F14). */}
-      <Card title="Net worth percentile bands" subtitle="10–90% (outer), 25–75% (inner), median line — today's dollars">
+      <Card
+        title="Net worth percentile bands"
+        subtitle="10–90% (outer), 25–75% (inner), median line — today's dollars"
+        right={<Segmented value={fanMode} onChange={setFanMode} options={VIEW_OPTIONS} />}
+      >
         {mc ? (
           <div className={dim}>
-            <FanChart mc={mc} retireAge={plan.profile.retireAge} />
+            {fanMode === 'chart' ? <FanChart mc={mc} retireAge={plan.profile.retireAge} /> : <FanTable mc={mc} />}
+            <FailureStrip mc={mc} />
           </div>
         ) : (
           <div className="flex h-[360px] items-center justify-center text-sm text-[var(--c-muted)]">Computing distributions…</div>
         )}
       </Card>
-      <Card title="Distribution of ending net worth" subtitle="Where each trial lands at end of plan (top 5% grouped into the last bin)">
+      <Card
+        title="Distribution of ending net worth"
+        subtitle="Where each trial lands at end of plan (top 5% grouped into the last bin; bars labeled by bin start)"
+        right={<Segmented value={histMode} onChange={setHistMode} options={VIEW_OPTIONS} />}
+      >
         {mc ? (
           <div className={dim}>
-            <OutcomeHistogram finals={mc.finalNetWorths} />
+            {histMode === 'chart' ? <OutcomeHistogram bins={bins} /> : <HistogramTable bins={bins} />}
           </div>
         ) : (
           <div className="flex h-[220px] items-center justify-center text-sm text-[var(--c-muted)]">Computing distributions…</div>

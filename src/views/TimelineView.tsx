@@ -3,6 +3,7 @@
 
 import { drawdownStartAge } from '../engine/metrics';
 import { Card } from '../components/ui';
+import { useNav } from '../store/NavContext';
 import { useSim } from '../store/SimContext';
 
 const W = 1000;
@@ -11,6 +12,7 @@ const LEVELS = [-96, 62, -56, 102, -16] as const; // label stagger offsets from 
 
 export function TimelineView() {
   const { plan, milestones, proj } = useSim();
+  const { goToCashFlow } = useNav();
   const { currentAge, lifeExpectancy } = plan.profile;
   const x = (age: number) => 40 + ((age - currentAge) / Math.max(1, lifeExpectancy - currentAge)) * (W - 80);
   const year = (age: number) => plan.planStartYear + age - currentAge;
@@ -57,7 +59,20 @@ export function TimelineView() {
             const my = AXIS_Y + offset;
             const px = x(m.age!);
             return (
-              <g key={`${m.name}-${i}`}>
+              // Each marker cross-links to that year's cash flow (F22). SVG groups take
+              // focus/role/keys, so the link is keyboard-reachable too.
+              <g
+                key={`${m.name}-${i}`}
+                role="button"
+                tabIndex={0}
+                aria-label={`View cash flow at age ${m.age}`}
+                cursor="pointer"
+                // bounding-box: the whole marker area is clickable, not just its sparse shapes
+                pointerEvents="bounding-box"
+                onClick={() => goToCashFlow(m.age!)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') goToCashFlow(m.age!); }}
+              >
+                <title>{`${m.name} — view cash flow at age ${m.age}`}</title>
                 <line x1={px} x2={px} y1={above ? my + 14 : AXIS_Y + 11} y2={above ? AXIS_Y - 11 : my - 14} stroke="var(--c-muted)" strokeDasharray="2 3" strokeWidth={1} />
                 <circle cx={px} cy={above ? AXIS_Y - 11 : AXIS_Y + 11} r={3} fill={m.kind === 'user' ? 'var(--c-cash)' : 'var(--c-median)'} />
                 <text x={px} y={my} textAnchor="middle" fontSize={13}>{m.emoji}</text>

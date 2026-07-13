@@ -1,12 +1,13 @@
 // Cash-flow Sankey for any selected year: income sources → household cash flow →
 // taxes / spending / savings destinations. Values are the engine's actual funded flows.
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { ResponsiveContainer, Sankey, Tooltip } from 'recharts';
 import { ACCOUNT_TYPES, type YearRow } from '../engine/types';
 import { fmtCompact, fmtUSD } from '../lib/format';
 import { ACCOUNT_LABELS } from '../components/charts/chartTheme';
 import { Card, Empty } from '../components/ui';
+import { useNav } from '../store/NavContext';
 import { usePlanStore } from '../store/PlanContext';
 import { useSim } from '../store/SimContext';
 
@@ -72,11 +73,16 @@ interface NodeProps {
   payload: SankeyNode & { value: number; depth: number };
 }
 
+/** Long names clip against the chart edges — truncate at ~18 chars; the full name stays
+ *  available via the SVG <title> (hover) and the tooltip (F20). */
+const truncate = (name: string) => (name.length > 18 ? `${name.slice(0, 17)}…` : name);
+
 function Node({ x, y, width, height, payload }: NodeProps) {
   const isHub = payload.name === 'Household cash flow';
   const left = payload.depth === 0 && !isHub;
   return (
     <g>
+      <title>{payload.name}</title>
       <rect x={x} y={y} width={width} height={Math.max(2, height)} rx={2} fill={payload.color} fillOpacity={0.9} />
       <text
         x={isHub ? x + width / 2 : left ? x - 6 : x + width + 6}
@@ -86,7 +92,7 @@ function Node({ x, y, width, height, payload }: NodeProps) {
         fontSize={11}
         fill="var(--c-ink-2)"
       >
-        <tspan fontWeight={600} fill="var(--c-ink)">{payload.name}</tspan>
+        <tspan fontWeight={600} fill="var(--c-ink)">{truncate(payload.name)}</tspan>
         <tspan dx={5} fill="var(--c-muted)">{fmtCompact(payload.value)}</tspan>
       </text>
     </g>
@@ -114,7 +120,10 @@ function Link({ sourceX, targetX, sourceY, targetY, sourceControlX, targetContro
 export function SankeyView() {
   const { plan } = usePlanStore();
   const { proj } = useSim();
-  const [age, setAge] = useState(plan.profile.currentAge);
+  // The selected age lives in NavContext so cross-links land here with a year picked,
+  // and returning to the tab resumes where you were looking (F22).
+  const { cashFlowAge, setCashFlowAge: setAge } = useNav();
+  const age = cashFlowAge ?? plan.profile.currentAge;
   const clamped = Math.min(Math.max(age, plan.profile.currentAge), plan.profile.lifeExpectancy);
   const row = proj.rows.find((r) => r.age === clamped) ?? proj.rows[0];
 
