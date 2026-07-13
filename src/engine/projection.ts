@@ -14,8 +14,10 @@ import { federalTax, payrollTax, stateTax } from './tax';
 import {
   EARLY_WITHDRAWAL_PENALTY, PENALTY_FREE_AGE, SS_TAXABLE_SHARE, rmdDivisor, rmdStartAge,
 } from './taxConfig';
-import type {
-  AccountType, PlanInput, ProjectionResult, ReturnGenerator, TaxesPaid, YearRow,
+import {
+  ACCOUNT_TYPES,
+  type AccountType, type PlanInput, type ProjectionResult, type ReturnGenerator,
+  type TaxesPaid, type YearRow,
 } from './types';
 
 /** Tax/withdrawal fixed point stops when the tax estimate moves less than this. */
@@ -35,10 +37,59 @@ export function spendingAtAge(plan: PlanInput, age: number): number {
   return spend;
 }
 
+/** One resolved step of an account's contribution schedule. */
+export interface ContributionStep {
+  fromAge: number;
+  annual: number;
+}
+
+/**
+ * Resolve an account's contribution schedule to ascending level steps (D28).
+ * The base `contribution` runs from currentAge; changes at or before currentAge are
+ * shadowed by it (the UI warns); two changes at the same age keep list order, so a
+ * forward scan makes the later one win.
+ */
+export function contributionSteps(plan: PlanInput, t: AccountType): ContributionStep[] {
+  const { currentAge } = plan.profile;
+  const changes = (plan.accounts[t].changes ?? [])
+    .filter((c) => c.fromAge > currentAge)
+    .sort((a, b) => a.fromAge - b.fromAge);
+  return [
+    { fromAge: currentAge, annual: plan.accounts[t].contribution },
+    ...changes.map((c) => ({ fromAge: c.fromAge, annual: c.annual })),
+  ];
+}
+
+/**
+ * Planned contribution for an account at an age. `contributionGrowth` compounds within
+ * the step in force, from that step's own start age — the number the user typed is what
+ * goes in during the step's first year (D28; matches income-stream growth). Zero from
+ * retirement on. Pass precomputed `steps` in hot loops.
+ */
+export function contributionAtAge(
+  plan: PlanInput,
+  t: AccountType,
+  age: number,
+  steps: ContributionStep[] = contributionSteps(plan, t),
+): number {
+  const { currentAge, retireAge } = plan.profile;
+  if (age < currentAge || age >= retireAge) return 0;
+  let step = steps[0];
+  for (const s of steps) {
+    if (s.fromAge <= age) step = s;
+  }
+  return step.annual * (1 + plan.assumptions.contributionGrowth) ** (age - step.fromAge);
+}
+
 export function project(plan: PlanInput, returns: ReturnGenerator): ProjectionResult {
   const { profile, assumptions, tax, socialSecurity: ss } = plan;
   const birthYear = plan.planStartYear - profile.currentAge;
   const rmdAge = rmdStartAge(birthYear);
+
+  // Resolved once per projection: Monte Carlo runs this loop thousands of times.
+  const schedules = Object.fromEntries(
+    ACCOUNT_TYPES.map((t) => [t, contributionSteps(plan, t)]),
+  ) as Record<AccountType, ContributionStep[]>;
 
   const bal = zeroByAccount();
   for (const t of Object.keys(bal) as AccountType[]) bal[t] = plan.accounts[t].balance;
@@ -80,11 +131,9 @@ export function project(plan: PlanInput, returns: ReturnGenerator): ProjectionRe
         : 0;
     const ssIncome = (age >= ss.claimAge ? ss.annual : 0) + partnerSs;
 
-    const contribScale =
-      age >= profile.retireAge ? 0 : (1 + assumptions.contributionGrowth) ** yearIndex;
     const planned = zeroByAccount();
     for (const t of Object.keys(planned) as AccountType[]) {
-      planned[t] = plan.accounts[t].contribution * contribScale;
+      planned[t] = contributionAtAge(plan, t, age, schedules[t]);
     }
     // Pre-tax contributions can't exceed earned income; scale trad+hsa down together.
     const pretaxPlanned = planned.trad + planned.hsa;

@@ -15,10 +15,21 @@ export const ACCOUNT_LABELS: Record<AccountType, string> = {
   cash: 'Cash',
 };
 
+/** A scheduled change to an account's planned contribution: a new level that takes
+ *  effect at `fromAge` and holds until the next change (or retirement). */
+export interface ContributionChange {
+  id: string;
+  fromAge: number;
+  /** New annual contribution level from that age, in today's $. */
+  annual: number;
+}
+
 export interface AccountInput {
   balance: number;
   /** Planned annual contribution while working (today's $). Funded only from actual surplus. */
   contribution: number;
+  /** Age-based level changes (D28). Absent/empty = flat `contribution` until retirement. */
+  changes?: ContributionChange[];
 }
 
 export type IncomeKind = 'w2' | 'se';

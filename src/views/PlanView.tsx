@@ -2,14 +2,14 @@
 // projection preview in a sticky rail. Charts everywhere update as you type/drag.
 
 import { useState } from 'react';
-import { ACCOUNT_LABELS, ACCOUNT_TYPES, type AccountInput, type AccountType, type Assumptions, type ExpensesInput, type IncomeStream, type PlanInput, type Profile, type TaxSettings } from '../engine/types';
+import { ACCOUNT_LABELS, ACCOUNT_TYPES, type AccountInput, type AccountType, type Assumptions, type ContributionChange, type ExpensesInput, type IncomeStream, type PlanInput, type Profile, type TaxSettings } from '../engine/types';
 import { savingsRate } from '../engine/metrics';
-import { spendingAtAge } from '../engine/projection';
+import { contributionAtAge, contributionSteps, spendingAtAge } from '../engine/projection';
 import { portfolioStats } from '../engine/returns';
 import { uid } from '../engine/seed';
 import { fmtCompact, fmtPct } from '../lib/format';
 import { NetWorthArea } from '../components/charts/NetWorthArea';
-import { Btn, Card, Empty, NumField, Segmented, Select } from '../components/ui';
+import { Btn, Card, Empty, Help, NumField, Segmented, Select } from '../components/ui';
 import { usePlanStore } from '../store/PlanContext';
 import { useSim } from '../store/SimContext';
 
@@ -32,6 +32,21 @@ export function PlanView() {
   const tax = (t: Partial<TaxSettings>) => patch('tax', { ...plan.tax, ...t });
   const account = (t: AccountType, a: Partial<AccountInput>) =>
     patch('accounts', { ...plan.accounts, [t]: { ...plan.accounts[t], ...a } });
+  // Contribution schedules (D28). An emptied list is dropped so exports stay clean.
+  const setChanges = (t: AccountType, list: ContributionChange[]) =>
+    account(t, { changes: list.length > 0 ? list : undefined });
+  const patchChange = (t: AccountType, id: string, c: Partial<ContributionChange>) =>
+    setChanges(t, (plan.accounts[t].changes ?? []).map((x) => (x.id === id ? { ...x, ...c } : x)));
+  const addChange = (t: AccountType) => {
+    const existing = plan.accounts[t].changes ?? [];
+    const last = existing[existing.length - 1];
+    setChanges(t, [...existing, {
+      id: uid(),
+      fromAge: Math.min(plan.profile.retireAge - 1, (last?.fromAge ?? plan.profile.currentAge) + 5),
+      annual: last?.annual ?? plan.accounts[t].contribution,
+    }]);
+  };
+  const scheduleWarnings = sim.issues.filter((i) => i.level === 'warning');
   const income = (id: string, s: Partial<IncomeStream>) =>
     patch('incomes', plan.incomes.map((i) => (i.id === id ? { ...i, ...s } : i)));
   const moveWithdrawal = (i: number, d: -1 | 1) => {
@@ -59,6 +74,31 @@ export function PlanView() {
   // Basis disclosure open-state survives tab switches for the rest of the browser
   // session, without becoming a forever-flag (F6).
   const [basisOpen, setBasisOpen] = useState(() => sessionStorage.getItem('firepath-basis-open') === '1');
+  // Which account's contribution schedule is expanded (one at a time keeps the card scannable).
+  const [scheduleOpen, setScheduleOpen] = useState<AccountType | null>(null);
+
+  // Funded-vs-planned (D28): the engine funds contributions from each year's actual
+  // surplus and silently scales them down when it's short — surface that here, where
+  // the plan is typed in. Shortfall years are counted, not just year one, because a
+  // schedule makes it easy to over-plan a later age.
+  const funding = (() => {
+    let workingYears = 0;
+    let shortYears = 0;
+    let first: { age: number; planned: number; funded: number } | null = null;
+    let anyPlanned = false;
+    for (const r of sim.proj.rows) {
+      if (r.age >= plan.profile.retireAge) break;
+      workingYears++;
+      const planned = ACCOUNT_TYPES.reduce((s, t) => s + contributionAtAge(plan, t, r.age), 0);
+      if (planned > 0) anyPlanned = true;
+      const funded = Object.values(r.contributions).reduce((s, x) => s + x, 0);
+      if (funded < planned - 1) {
+        shortYears++;
+        first ??= { age: r.age, planned, funded };
+      }
+    }
+    return { anyPlanned, workingYears, shortYears, first };
+  })();
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -156,19 +196,100 @@ export function PlanView() {
 
         <Card title="Accounts" subtitle="Balances today + planned annual contributions">
           <div className="grid gap-2">
-            <div className="grid grid-cols-[1.2fr_1fr_1fr] gap-2 text-[10px] uppercase tracking-wide text-[var(--c-muted)]">
+            <div className="grid grid-cols-[1.2fr_1fr_1.3fr] gap-2 text-[10px] uppercase tracking-wide text-[var(--c-muted)]">
               <span /><span>Balance</span><span>Contribution / yr</span>
             </div>
-            {ACCOUNT_TYPES.map((t) => (
-              <div key={t} className="grid grid-cols-[1.2fr_1fr_1fr] items-center gap-2">
-                <span className="flex items-center gap-1.5 text-xs font-medium">
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: `var(--c-${t})` }} />
-                  {ACCOUNT_LABELS[t]}
-                </span>
-                <NumField label="" prefix="$" min={0} value={plan.accounts[t].balance} onChange={(v) => account(t, { balance: v })} />
-                <NumField label="" prefix="$" min={0} value={plan.accounts[t].contribution} onChange={(v) => account(t, { contribution: v })} />
-              </div>
-            ))}
+            {ACCOUNT_TYPES.map((t) => {
+              const changes = plan.accounts[t].changes ?? [];
+              const open = scheduleOpen === t;
+              const scheduled = changes.length > 0;
+              return (
+                <div key={t} className={open ? 'rounded-lg border border-[var(--c-border)] p-1.5' : ''}>
+                  <div className="grid grid-cols-[1.2fr_1fr_1.3fr] items-center gap-2">
+                    <span className="flex items-center gap-1.5 text-xs font-medium">
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ background: `var(--c-${t})` }} />
+                      {ACCOUNT_LABELS[t]}
+                    </span>
+                    <NumField label="" ariaLabel={`${ACCOUNT_LABELS[t]} balance`} prefix="$" min={0} value={plan.accounts[t].balance} onChange={(v) => account(t, { balance: v })} />
+                    <span className="flex items-center gap-1">
+                      <span className="min-w-0 flex-1">
+                        <NumField label="" ariaLabel={`${ACCOUNT_LABELS[t]} contribution per year`} prefix="$" min={0} value={plan.accounts[t].contribution} onChange={(v) => account(t, { contribution: v })} />
+                      </span>
+                      <button
+                        type="button"
+                        aria-label={`Vary ${ACCOUNT_LABELS[t]} contribution by age`}
+                        aria-pressed={open}
+                        title="Vary by age"
+                        className={`rounded-lg border px-1.5 py-1.5 text-xs transition-colors ${
+                          open || scheduled
+                            ? 'border-[var(--c-accent)]/50 text-[var(--c-accent)]'
+                            : 'border-[var(--c-border)] text-[var(--c-muted)] hover:text-[var(--c-ink)]'
+                        }`}
+                        onClick={() => setScheduleOpen(open ? null : t)}
+                      >
+                        ⏱
+                      </button>
+                    </span>
+                  </div>
+                  {scheduled && !open && (
+                    <p className="mt-1 text-right text-[11px] tabular-nums text-[var(--c-ink-2)]">
+                      {contributionSteps(plan, t).map((s, i) => (i === 0 ? fmtCompact(s.annual) : `${fmtCompact(s.annual)} @${s.fromAge}`)).join(' → ')}
+                    </p>
+                  )}
+                  {open && (
+                    <div className="mt-2 grid gap-1.5 border-t border-[var(--c-border)] pt-2">
+                      <p className="text-[11px] leading-relaxed text-[var(--c-muted)]">
+                        The amount above applies from age {plan.profile.currentAge}; each change sets a
+                        new level from its age and holds until the next. Everything stops at retirement
+                        (age {plan.profile.retireAge}).
+                      </p>
+                      {changes.map((c) => {
+                        const warns = scheduleWarnings.filter((w) => w.accountType === t && w.changeId === c.id);
+                        return (
+                          <div key={c.id}>
+                            <div className={`${rowGrid} grid-cols-[1fr_1.4fr_auto]`}>
+                              <NumField label="From age" value={c.fromAge} onChange={(v) => patchChange(t, c.id, { fromAge: Math.round(v) })} />
+                              <NumField label="New amount" prefix="$" min={0} value={c.annual} onChange={(v) => patchChange(t, c.id, { annual: v })} />
+                              <Btn variant="danger" title="Remove change" onClick={() => setChanges(t, changes.filter((x) => x.id !== c.id))}>✕</Btn>
+                            </div>
+                            {warns.map((w) => (
+                              <p key={w.code} className="mt-0.5 text-[11px] text-[var(--c-bad)]">⚠ {w.message}</p>
+                            ))}
+                          </div>
+                        );
+                      })}
+                      <div>
+                        <Btn onClick={() => addChange(t)}>+ Add change at age…</Btn>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+            {funding.anyPlanned && (
+              <p
+                data-testid="funding-status"
+                className={`mt-1 flex items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-[11px] leading-relaxed ${
+                  funding.first
+                    ? 'bg-[var(--c-bad)]/10 text-[var(--c-bad)]'
+                    : 'bg-[var(--c-page)] text-[var(--c-ink-2)]'
+                }`}
+              >
+                {funding.first ? (
+                  <span>
+                    ⚠ {funding.shortYears} of {funding.workingYears} working years can't fund the
+                    full plan — first at age {funding.first.age}, where income covers{' '}
+                    {fmtCompact(funding.first.funded)} of {fmtCompact(funding.first.planned)} planned.
+                  </span>
+                ) : (
+                  <span>✓ Planned contributions are fully funded from income in every working year.</span>
+                )}
+                <Help
+                  label="contribution funding"
+                  text="Contributions come out of each year's income after taxes and spending. When a year falls short (a one-time expense, a lighter income year), the plan contributes what's left and skips the rest — it never borrows. The projection and all charts already reflect this."
+                />
+              </p>
+            )}
             {/* Basis is a tax-nerd concept; it shouldn't ambush someone typing in their
                 first balances (F6). */}
             <details

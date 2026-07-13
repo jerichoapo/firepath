@@ -114,6 +114,29 @@ describe('parseExport', () => {
     expect(result.activeId).toBe(result.scenarios[0].id); // unknown activeId falls back
   });
 
+  it('round-trips contribution schedules; absent stays absent (pre-D28 exports)', () => {
+    const result = parseExport(demoExport());
+    if (!result.ok) throw new Error(result.error);
+    const accounts = result.scenarios[0].plan.accounts;
+    // The demo 401(k) carries a schedule; every other account has no `changes` key at all.
+    expect(accounts.trad.changes).toHaveLength(1);
+    expect(accounts.trad.changes![0]).toMatchObject({ fromAge: 50, annual: 10_000 });
+    expect('changes' in accounts.taxable).toBe(false);
+  });
+
+  it('rejects malformed contribution changes with the exact path', () => {
+    const cases: [mutate: (d: any) => void, errorPart: string][] = [
+      [(d) => { d.scenarios[0].plan.accounts.trad.changes[0].fromAge = '50'; }, 'accounts.trad.changes[0].fromAge'],
+      [(d) => { d.scenarios[0].plan.accounts.trad.changes[0].annual = null; }, 'accounts.trad.changes[0].annual'],
+      [(d) => { d.scenarios[0].plan.accounts.trad.changes = 'soon'; }, 'accounts.trad.changes'],
+    ];
+    for (const [mutate, errorPart] of cases) {
+      const result = parseExport(doctor(demoExport(), mutate));
+      expect(result.ok, errorPart).toBe(false);
+      if (!result.ok) expect(result.error, errorPart).toContain(errorPart);
+    }
+  });
+
   it('drops unknown fields instead of carrying them into the store', () => {
     const result = parseExport(doctor(demoExport(), (d) => {
       d.scenarios[0].plan.evil = { web: 'hook' };

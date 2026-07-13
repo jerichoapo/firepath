@@ -40,6 +40,7 @@ test story — the app is always shippable between phases.
 | 5 | Plan-tab hero & help system | F6 F13 F28 | ~3h | No |
 | 6 | Scenario workflow | F15 F17 F19 F25 | ~4h | No (store only) |
 | 7 | Charts, tables & cross-navigation | F10 F20 F21 F22 F26 F29 | ~6h | MC failure ages |
+| 8 | Contribution schedules & input efficacy | post-audit | ~8h | Age-varying contributions |
 
 Total ≈ 4–5 working days. All 30 audit findings are covered; the three explicitly deferred
 ideas are listed at the end.
@@ -383,6 +384,108 @@ runs × (1 − successRate).
   deterministic default.
 
 **DECISIONS.md:** D24 (seed re-roll is session-only; persistence keeps the fixed default).
+
+---
+
+## Phase 8 — Contribution schedules & input efficacy *(post-audit, user-requested)*
+
+**Goal:** two promises. (a) Planned contributions can vary by age — "I put $32k in my
+401(k) until 45, then $15k" — with the same phase mental model as Spending. (b) Every
+number the user can type provably impacts exactly what it is supposed to impact, enforced
+by tests that will fail if any future field ships dead or mis-wired.
+
+### 8a — Age-varying contribution schedules
+
+**Design decisions:**
+- `AccountInput` gains optional `changes?: { id: string; fromAge: number; annual: number }[]`.
+  The existing `contribution` field stays as the level in force from today until the first
+  change — every existing plan, export, and test remains valid with no migration. Semantics
+  are identical to `SpendingPhase`: a level that changes at an age and holds until the next
+  change; all contributions still stop at `retireAge`.
+- New pure helper `contributionAtAge(account, currentAge, age)` in the engine, mirroring
+  `spendingAtAge`. The projection loop's `planned[t]` computation calls it; nothing else in
+  the loop changes.
+- **`contributionGrowth` compounds within the step in force, from that step's own start
+  age** (the base level's start is `currentAge`). The number the user types is what goes in
+  during that step's first year — matching how income-stream `growth` works, and unlike the
+  current global `(1+g)^yearIndex` which would silently distort typed step amounts. This is
+  a small behavior change for schedules only; unscheduled accounts are numerically identical
+  to today (single step starting at currentAge ⇒ same exponent).
+- Validation (warning level, not invalid): a change with `fromAge ≥ retireAge` never takes
+  effect; `fromAge ≤ currentAge` is shadowed by the base level; two changes at the same age
+  on one account. Engine sorts by `fromAge` and last-writer-wins so no input can crash it.
+- Import validator (D27 pattern): `changes` is an optional array; each entry rebuilt
+  (`fromAge`/`annual` finite numbers, `id` non-empty string); reject wrong types by path.
+  Export round-trips.
+- **UI (per agreed mockup):** the Accounts card keeps its 5-row grid. Each contribution
+  cell gains a small timeline button ("Vary by age"). Expanded, the row shows the schedule:
+  the base level pinned as "From age {currentAge} — now", then one row per change
+  (from-age + amount + remove), then "+ Add change at age…". Collapsed, a scheduled account
+  shows a summary ("$32k → $15k @45 → $8k @50") instead of a bare input. Accounts without
+  schedules look exactly as they do today.
+- **Funded-vs-planned footer** in the Accounts card: the engine funds contributions from
+  actual surplus and silently scales them down (`pretaxScale`/`contribFactor`) — invisible
+  today, dangerous once schedules make over-planning easy. Footer compares year-1 planned
+  (Σ `contributionAtAge` at currentAge) against year-1 funded (Σ `rows[0].contributions`):
+  "Planned $72k/yr · fully funded ✓" or "⚠ Income funds $61k of $72k planned" (warning
+  color, help popover explaining the scaling).
+
+**Changes by file:** `types.ts` · `projection.ts` (+ `contributionAtAge`) · `validate.ts`
+· `store/import.ts` (+ tests) · `PlanView.tsx` (schedule editor, footer) · `seed.ts`
+(demo plan gains one schedule so the feature is discoverable and exercised).
+
+**Unit tests:** `contributionAtAge` step boundaries (inclusive fromAge, holds until next,
+zero at retireAge); growth exponent resets per step; unscheduled account bit-identical to
+pre-P8 projection; sabbatical ($0 step then resume); import round-trip + type rejection by
+path; funded-vs-planned math on an over-planned fixture.
+
+**E2E acceptance:**
+- Demo plan: expand the 401(k) schedule, add "from 45 → $15k"; the live-rail net worth at
+  retirement drops; the collapsed summary reads "$32k → $15k @45"; reload persists it.
+- A $0 step at 40 and a resume step at 43 → projection table contributions column shows
+  0 for ages 40–42, resumes at 43.
+- Schedule an amount larger than income at that age → footer flips to the ⚠ funded state;
+  removing the step restores "fully funded".
+- Export → wipe → import restores the schedule exactly (summary + expanded rows).
+
+### 8b — Input efficacy matrix ("every number does what it says")
+
+**Design decisions:**
+- **Engine-level sensitivity harness** (unit test, the strong guarantee): a table-driven
+  test walks every leaf field of `PlanInput` with an explicit classification — each field
+  is either **EFFECTIVE** (perturbing it must change a named observable: deterministic
+  projection, MC result, backtest, timeline, or validation output) or **INERT-BY-DESIGN**
+  (documented: `downshiftAge`, milestone names/ages, `mc.runs`/`mc.mode` w.r.t. the
+  deterministic path, display-only `inflation`, stream/expense `name`s). The harness fails
+  on any unclassified field — a future field cannot ship without declaring what it does,
+  and a wiring regression (field stops mattering) fails the suite.
+- Direction checks where sign is meaningful: more spending ⇒ FI number up, success down;
+  higher return ⇒ final net worth up; later claim age ⇒ SS starts later.
+- Scope-isolation checks (the subtle bugs): `returnSd` and `stockAllocation` must NOT move
+  the deterministic projection; `stockAllocation` must move bootstrap MC and backtest but
+  not normal-mode MC; `cashReturn` matters only when cash > 0; `kind` w2 vs se changes
+  FICA vs SE tax, not gross income.
+- **E2E input-impact spec**, one test per Plan-tab card (not per field — keeps CI sane):
+  each test edits that card's fields through the real inputs and asserts a specific cheap
+  deterministic readout moves (live-rail stats, header FI number, projection table cells),
+  plus the card's negative assertion (e.g. editing downshift age / a milestone leaves the
+  FI number byte-identical). MC-only knobs (trials, mode, σ) get one MC-based test with the
+  existing keep-stale/`data-computing` wait helpers. Withdrawal order gets a drawdown
+  fixture asserting reordering changes which account depletes first in the projection table.
+
+**Changes by file:** new `src/engine/sensitivity.test.ts` · new `e2e/input-impact.spec.ts`
+· fixes for anything the matrix catches (unknown until it runs — that's the point).
+
+**E2E acceptance:** the new specs pass; any field the harness exposes as dead is either
+wired or explicitly reclassified inert with a visible UI cue (the F4 rule: placement/copy
+must say so).
+
+**DECISIONS.md:** D28 (contribution schedules: level-change steps, per-step growth
+compounding, retireAge cap); D29 (every `PlanInput` field carries an efficacy
+classification enforced by the sensitivity harness).
+
+**Exit gate:** standard (unit + build + e2e green, one commit per sub-phase or one for
+both, push, live-verify in browser).
 
 ---
 

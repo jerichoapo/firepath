@@ -258,3 +258,24 @@ flush: reload-and-check tests poll IndexedDB for the persisted state first (the
 waitForFlag pattern, generalized). GitHub Actions runs build + vitest + the full
 Playwright suite on every push; the vite dev server ignores test-artifact directories so
 suite runs can't perturb the server they run against.
+
+## D28. Contribution schedules are level-change steps; growth compounds per step; funding is visible
+Planned contributions can vary by age via `AccountInput.changes` — {fromAge, annual}
+steps with SpendingPhase semantics: a level takes effect at its age and holds until the
+next one, everything still stops at retireAge. Not additive income-stream-style ranges:
+ranges invite gaps and overlaps, while level steps mean every working age has exactly
+one defined amount. The base `contribution` field stays as the level from today, so
+pre-D28 plans, exports, and the import validator are unchanged (the `changes` key is
+optional and dropped when emptied). `contributionGrowth` compounds WITHIN the step in
+force from that step's own start age — the number the user types is what goes in during
+the step's first year, matching income-stream growth; unscheduled accounts are
+numerically identical to the old global formula. Inert changes (at/after retirement, at
+or before current age, duplicate ages) are warning-level PlanIssues rendered inline in
+the schedule editor — the engine copes (shadow/sort/last-writer-wins) and never crashes
+on any input. The Accounts card also gained the funded-vs-planned footer: the engine
+funds contributions from each year's actual surplus and silently scales them down
+(pretaxScale/contribFactor), which schedules make easy to trip at a later age, so the
+card counts shortfall years across the whole working span and names the first one.
+Chart-visible lesson: contribution edits mostly REALLOCATE money between accounts
+(surplus already sweeps to taxable), so their honest observable is the per-year Saved
+cell / taxes, not $M-rounded net-worth readouts.

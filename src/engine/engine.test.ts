@@ -3,7 +3,7 @@ import { runBacktest } from './backtest';
 import { HISTORICAL } from './data/historical';
 import { coastNumberAt, drawdownStartAge, fiAge, fiNumber, isCoastFireNow, savingsRate } from './metrics';
 import { runMonteCarlo } from './montecarlo';
-import { project, spendingAtAge } from './projection';
+import { contributionAtAge, contributionSteps, project, spendingAtAge } from './projection';
 import { bootstrapReturns, fixedReturns, historicalPortfolio, mulberry32, portfolioStats } from './returns';
 import { bracketTax, federalTax, ltcgTax, payrollTax } from './tax';
 import { FEDERAL_2026 } from './taxConfig';
@@ -356,6 +356,112 @@ describe('plan validity', () => {
     p.accounts.taxable.balance = -50_000;
     p.rothBasis = -1;
     expect(planIssues(p).map((i) => i.code)).toEqual(['negative-balance', 'negative-balance']);
+  });
+});
+
+describe('contribution schedules (D28)', () => {
+  it('each step holds until the next; growth compounds within the step from its own start age', () => {
+    const p = bare(); // ages 40 → retire 60
+    p.assumptions.contributionGrowth = 0.02;
+    p.accounts.trad = {
+      balance: 0,
+      contribution: 20_000,
+      changes: [
+        { id: 'c1', fromAge: 45, annual: 10_000 },
+        { id: 'c2', fromAge: 50, annual: 0 }, // sabbatical
+        { id: 'c3', fromAge: 53, annual: 30_000 },
+      ],
+    };
+    const at = (age: number) => contributionAtAge(p, 'trad', age);
+    expect(at(39)).toBe(0); // before current age
+    expect(at(40)).toBeCloseTo(20_000, 6); // typed value in the step's first year
+    expect(at(44)).toBeCloseTo(20_000 * 1.02 ** 4, 6);
+    expect(at(45)).toBeCloseTo(10_000, 6); // NOT 10k × 1.02^5 — growth resets per step
+    expect(at(49)).toBeCloseTo(10_000 * 1.02 ** 4, 6);
+    expect(at(50)).toBe(0);
+    expect(at(52)).toBe(0);
+    expect(at(53)).toBeCloseTo(30_000, 6);
+    expect(at(59)).toBeCloseTo(30_000 * 1.02 ** 6, 6);
+    expect(at(60)).toBe(0); // retirement stops everything
+  });
+
+  it('changes at or before current age are shadowed; the later duplicate wins', () => {
+    const p = bare();
+    p.accounts.roth = {
+      balance: 0,
+      contribution: 6_000,
+      changes: [
+        { id: 'past', fromAge: 35, annual: 99_999 },
+        { id: 'dup1', fromAge: 45, annual: 1_000 },
+        { id: 'dup2', fromAge: 45, annual: 2_000 },
+      ],
+    };
+    expect(contributionSteps(p, 'roth').map((s) => s.annual)).toEqual([6_000, 1_000, 2_000]);
+    expect(contributionAtAge(p, 'roth', 40)).toBe(6_000); // past change ignored
+    expect(contributionAtAge(p, 'roth', 44)).toBe(6_000);
+    expect(contributionAtAge(p, 'roth', 45)).toBe(2_000); // last writer at the same age
+  });
+
+  it('an unscheduled account is identical to the legacy flat-contribution formula', () => {
+    const p = bare();
+    p.assumptions.contributionGrowth = 0.03;
+    p.accounts.trad.contribution = 15_000;
+    p.incomes = [{ id: 'w', name: 'w', kind: 'w2', annual: 300_000, startAge: 40, endAge: 59, growth: 0 }];
+    const proj = project(p, fixedReturns(0));
+    for (const r of proj.rows) {
+      const legacy = r.age >= 60 ? 0 : 15_000 * 1.03 ** (r.age - 40);
+      expect(contributionAtAge(p, 'trad', r.age)).toBeCloseTo(legacy, 8);
+      expect(r.contributions.trad).toBeCloseTo(legacy, 6); // income amply funds it
+    }
+  });
+
+  it('a $0 sabbatical step zeroes those years in the projection and resumes after', () => {
+    const p = bare();
+    p.accounts.trad = {
+      balance: 0,
+      contribution: 20_000,
+      changes: [
+        { id: 's', fromAge: 42, annual: 0 },
+        { id: 'r', fromAge: 44, annual: 20_000 },
+      ],
+    };
+    p.incomes = [{ id: 'w', name: 'w', kind: 'w2', annual: 200_000, startAge: 40, endAge: 59, growth: 0 }];
+    const proj = project(p, fixedReturns(0));
+    const contrib = (age: number) => proj.rows.find((r) => r.age === age)!.contributions.trad;
+    expect(contrib(41)).toBeCloseTo(20_000, 6);
+    expect(contrib(42)).toBe(0);
+    expect(contrib(43)).toBe(0);
+    expect(contrib(44)).toBeCloseTo(20_000, 6);
+    // Less pre-tax sheltering in sabbatical years ⇒ more tax on the same income.
+    const taxes = (age: number) => proj.rows.find((r) => r.age === age)!.taxes.total;
+    expect(taxes(42)).toBeGreaterThan(taxes(41));
+  });
+
+  it('warns on inert changes: after retirement, in the past, duplicate ages', () => {
+    const p = bare();
+    p.expenses.currentAnnual = 40_000; // complete plan → only schedule warnings fire
+    p.accounts.hsa = {
+      balance: 0,
+      contribution: 4_000,
+      changes: [
+        { id: 'late', fromAge: 60, annual: 1_000 },
+        { id: 'past', fromAge: 40, annual: 1_000 },
+        { id: 'd1', fromAge: 50, annual: 1_000 },
+        { id: 'd2', fromAge: 50, annual: 2_000 },
+      ],
+    };
+    const warnings = planIssues(p).filter((i) => i.level === 'warning');
+    expect(warnings.map((w) => [w.code, w.changeId])).toEqual([
+      ['change-after-retirement', 'late'],
+      ['change-in-past', 'past'],
+      ['change-duplicate-age', 'd2'],
+    ]);
+    expect(warnings.every((w) => w.accountType === 'hsa')).toBe(true);
+    expect(isIncomplete(planIssues(p))).toBe(false); // warnings never gate the verdict
+  });
+
+  it('the demo schedule is clean: no warnings on the seed plan', () => {
+    expect(planIssues(seedPlan(START_YEAR))).toEqual([]);
   });
 });
 

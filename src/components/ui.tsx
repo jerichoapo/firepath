@@ -102,7 +102,7 @@ export function Help({ text, label }: { text: string; label?: string }) {
  * `min`/`max` are in DISPLAY units (like `slider`); typing commits unclamped so partial
  * numbers don't jump, but blur/Enter clamps the final value into range (D19).
  */
-export function NumField({ label, value, onChange, min, max, step, prefix, suffix, percent, slider, help }: {
+export function NumField({ label, value, onChange, min, max, step, prefix, suffix, percent, slider, help, ariaLabel }: {
   label: string;
   value: number;
   onChange: (v: number) => void;
@@ -115,6 +115,8 @@ export function NumField({ label, value, onChange, min, max, step, prefix, suffi
   /** [min, max, step] for a paired slider (in display units). */
   slider?: [number, number, number];
   help?: string;
+  /** Accessible name when there is no visible label (e.g. grid cells named by column headers). */
+  ariaLabel?: string;
 }) {
   const display = percent ? Math.round(value * 10000) / 100 : value;
   const [text, setText] = useState(String(display));
@@ -169,7 +171,7 @@ export function NumField({ label, value, onChange, min, max, step, prefix, suffi
         <input
           ref={inputRef}
           id={id}
-          aria-label={label || undefined}
+          aria-label={ariaLabel ?? (label || undefined)}
           className="w-full min-w-0 bg-transparent py-1.5 text-sm outline-none"
           inputMode="decimal"
           value={focused ? text : atRest}

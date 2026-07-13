@@ -54,7 +54,9 @@ export function seedPlan(startYear: number): PlanInput {
     profile: { currentAge: 35, partnerAge: 34, downshiftAge: 50, retireAge: 55, lifeExpectancy: 92 },
     accounts: {
       taxable: { balance: 120_000, contribution: 18_000 },
-      trad: { balance: 210_000, contribution: 32_000 },
+      // The 401(k) schedule demos D28, matching the part-time downshift income at 50:
+      // full contributions while both salaries run, a lighter level in the coast years.
+      trad: { balance: 210_000, contribution: 32_000, changes: [{ id: uid(), fromAge: 50, annual: 10_000 }] },
       roth: { balance: 60_000, contribution: 14_000 },
       hsa: { balance: 18_000, contribution: 8_000 },
       cash: { balance: 30_000, contribution: 0 },

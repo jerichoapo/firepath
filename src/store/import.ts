@@ -10,10 +10,10 @@
 import { nextColor } from '../engine/seed';
 import {
   ACCOUNT_TYPES, INVESTED_TYPES,
-  type AccountInput, type AccountType, type Assumptions, type ExpensesInput,
-  type IncomeStream, type InvestedAccountType, type OneTimeExpense, type PlanInput,
-  type Profile, type Scenario, type SocialSecurityInput, type SpendingPhase,
-  type TaxBracket, type TaxSettings, type UserMilestone,
+  type AccountInput, type AccountType, type Assumptions, type ContributionChange,
+  type ExpensesInput, type IncomeStream, type InvestedAccountType, type OneTimeExpense,
+  type PlanInput, type Profile, type Scenario, type SocialSecurityInput,
+  type SpendingPhase, type TaxBracket, type TaxSettings, type UserMilestone,
 } from '../engine/types';
 
 export type ParseResult =
@@ -62,12 +62,28 @@ function profile(v: unknown, path: string): Profile {
   };
 }
 
-function account(v: unknown, path: string): AccountInput {
+function contributionChange(v: unknown, path: string): ContributionChange {
   const o = obj(v, path);
   return {
+    id: str(o.id, `${path}.id`),
+    fromAge: num(o.fromAge, `${path}.fromAge`),
+    annual: num(o.annual, `${path}.annual`),
+  };
+}
+
+function account(v: unknown, path: string): AccountInput {
+  const o = obj(v, path);
+  const out: AccountInput = {
     balance: num(o.balance, `${path}.balance`),
     contribution: num(o.contribution, `${path}.contribution`),
   };
+  // Optional (pre-D28 exports have no schedules); absent stays absent so exports round-trip.
+  if (o.changes != null) {
+    out.changes = arr(o.changes, `${path}.changes`).map((c, i) =>
+      contributionChange(c, `${path}.changes[${i}]`),
+    );
+  }
+  return out;
 }
 
 function income(v: unknown, path: string): IncomeStream {
