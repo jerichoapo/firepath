@@ -102,8 +102,10 @@ function OutcomeHistogram({ finals }: { finals: number[] }) {
 
 export function MonteCarloView() {
   const { plan, update } = usePlanStore();
-  const { mc, mcProgress, incomplete, backtest } = useSim();
+  const { mc, mcProgress, mcComputing, incomplete, backtest } = useSim();
   const alt = useAltMc();
+  // Stale results stay on screen at reduced opacity while the worker recomputes (F12/F14).
+  const dim = `transition-opacity ${mcComputing ? 'opacity-50' : ''}`;
 
   if (incomplete) {
     return (
@@ -145,7 +147,9 @@ export function MonteCarloView() {
             <NumField
               label="Trials"
               value={plan.mc.runs}
-              onChange={(v) => update((p) => ({ ...p, mc: { ...p.mc, runs: Math.round(v) } }))}
+              // Clamped here, not just on blur: a mid-edit value must never send the
+              // worker a multi-million-trial job.
+              onChange={(v) => update((p) => ({ ...p, mc: { ...p.mc, runs: Math.min(MC_MAX_RUNS, Math.max(MC_MIN_RUNS, Math.round(v))) } }))}
               min={MC_MIN_RUNS}
               max={MC_MAX_RUNS}
               slider={[MC_MIN_RUNS, MC_MAX_RUNS, 500]}
@@ -169,22 +173,28 @@ export function MonteCarloView() {
 
         <Card title="Chance of success" subtitle="Share of trials that fund every year of spending through end of plan">
           {mc ? (
-            <div className="flex items-center gap-6">
-              <p
-                className="text-6xl font-bold tabular-nums"
-                style={{ color: mc.successRate >= 0.8 ? 'var(--c-good)' : mc.successRate < 0.6 ? 'var(--c-bad)' : 'var(--c-ink)' }}
-              >
-                {fmtPct(mc.successRate)}
-              </p>
-              <div className="text-xs leading-relaxed text-[var(--c-ink-2)]">
-                <p>{mc.runs.toLocaleString()} trials · {plan.mc.mode === 'normal' ? 'normal returns' : 'block bootstrap'}</p>
-                <p>{Math.round(mc.successRate * mc.runs).toLocaleString()} succeeded · {Math.round((1 - mc.successRate) * mc.runs).toLocaleString()} ran out of money</p>
-                <p>Median ending net worth: <b className="text-[var(--c-ink)]">{fmtCompact(mc.medianFinal)}</b></p>
+            <>
+              <div className={`flex items-center gap-6 ${dim}`}>
+                <p
+                  className="text-6xl font-bold tabular-nums"
+                  style={{ color: mc.successRate >= 0.8 ? 'var(--c-good)' : mc.successRate < 0.6 ? 'var(--c-bad)' : 'var(--c-ink)' }}
+                >
+                  {fmtPct(mc.successRate)}
+                </p>
+                <div className="text-xs leading-relaxed text-[var(--c-ink-2)]">
+                  <p>{mc.runs.toLocaleString()} trials · {plan.mc.mode === 'normal' ? 'normal returns' : 'block bootstrap'}</p>
+                  <p>{Math.round(mc.successRate * mc.runs).toLocaleString()} succeeded · {Math.round((1 - mc.successRate) * mc.runs).toLocaleString()} ran out of money</p>
+                  <p>Median ending net worth: <b className="text-[var(--c-ink)]">{fmtCompact(mc.medianFinal)}</b></p>
+                </div>
               </div>
-            </div>
+              {/* Thin recompute bar; the slot is always reserved so nothing jumps. */}
+              <div className={`mt-3 h-1 overflow-hidden rounded-full bg-[var(--c-grid)] transition-opacity ${mcComputing ? '' : 'opacity-0'}`}>
+                <div className="h-full rounded-full bg-[var(--c-accent)] transition-all" style={{ width: `${mcProgress * 100}%` }} />
+              </div>
+            </>
           ) : (
             <div>
-              <p className="mb-2 text-sm text-[var(--c-muted)]">Simulating… {Math.round(mcProgress * 100)}%</p>
+              <p className="mb-2 text-sm text-[var(--c-muted)]">Computing… {Math.round(mcProgress * 100)}%</p>
               <div className="h-2 overflow-hidden rounded-full bg-[var(--c-grid)]">
                 <div className="h-full rounded-full bg-[var(--c-accent)] transition-all" style={{ width: `${mcProgress * 100}%` }} />
               </div>
@@ -224,16 +234,26 @@ export function MonteCarloView() {
         </p>
       </Card>
 
-      {mc && (
-        <>
-          <Card title="Net worth percentile bands" subtitle="10–90% (outer), 25–75% (inner), median line — today's dollars">
+      {/* These cards never unmount once the view is open — a recompute dims them instead
+          of collapsing the layout (F14). */}
+      <Card title="Net worth percentile bands" subtitle="10–90% (outer), 25–75% (inner), median line — today's dollars">
+        {mc ? (
+          <div className={dim}>
             <FanChart mc={mc} retireAge={plan.profile.retireAge} />
-          </Card>
-          <Card title="Distribution of ending net worth" subtitle="Where each trial lands at end of plan (top 5% grouped into the last bin)">
+          </div>
+        ) : (
+          <div className="flex h-[360px] items-center justify-center text-sm text-[var(--c-muted)]">Computing distributions…</div>
+        )}
+      </Card>
+      <Card title="Distribution of ending net worth" subtitle="Where each trial lands at end of plan (top 5% grouped into the last bin)">
+        {mc ? (
+          <div className={dim}>
             <OutcomeHistogram finals={mc.finalNetWorths} />
-          </Card>
-        </>
-      )}
+          </div>
+        ) : (
+          <div className="flex h-[220px] items-center justify-center text-sm text-[var(--c-muted)]">Computing distributions…</div>
+        )}
+      </Card>
     </div>
   );
 }

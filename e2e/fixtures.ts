@@ -47,8 +47,8 @@ export const test = base.extend<AppFixtures>({
     await use(freshApp);
   },
   blankApp: async ({ freshApp }, use) => {
-    await freshApp.getByRole('button', { name: 'Data ▾' }).click();
-    await freshApp.getByRole('button', { name: /New blank scenario/ }).click();
+    await freshApp.getByRole('button', { name: 'Backup ▾' }).click();
+    await freshApp.getByRole('menuitem', { name: /New blank scenario/ }).click();
     await expect(activeScenarioName(freshApp)).toHaveText('New Scenario');
     await use(freshApp);
   },

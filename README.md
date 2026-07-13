@@ -20,7 +20,7 @@ npm run dev        # → http://localhost:5173
 ```
 
 The app opens with a generic demo household so every feature has something to show.
-Replace the numbers with your own, or use **Data ▾ → Reset to blank plan**.
+Replace the numbers with your own, or use **Backup ▾ → Reset to blank plan**.
 
 ```bash
 npm test           # engine unit tests (vitest)
@@ -91,4 +91,4 @@ Tech: Vite · React 18 · TypeScript (strict) · Tailwind CSS 4 · Recharts · D
 ## Privacy
 
 FirePath makes zero network requests after `npm install`. Plans live in your browser's
-IndexedDB under the `firepath` database. Export JSON backups from the **Data ▾** menu.
+IndexedDB under the `firepath` database. Export JSON backups from the **Backup ▾** menu.

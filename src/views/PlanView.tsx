@@ -32,6 +32,11 @@ export function PlanView() {
     patch('accounts', { ...plan.accounts, [t]: { ...plan.accounts[t], ...a } });
   const income = (id: string, s: Partial<IncomeStream>) =>
     patch('incomes', plan.incomes.map((i) => (i.id === id ? { ...i, ...s } : i)));
+  const moveWithdrawal = (i: number, d: -1 | 1) => {
+    const order = [...plan.tax.withdrawalOrder];
+    [order[i], order[i + d]] = [order[i + d], order[i]];
+    tax({ withdrawalOrder: order });
+  };
 
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -236,24 +241,29 @@ export function PlanView() {
             )}
             <div>
               <p className="mb-1 text-xs text-[var(--c-ink-2)]">Withdrawal order (cash is always first)</p>
-              <div className="flex flex-wrap gap-1.5">
+              <ol className="grid max-w-72 gap-1">
                 {plan.tax.withdrawalOrder.map((t, i) => (
-                  <span key={t} className="flex items-center gap-1 rounded-lg border border-[var(--c-border)] px-2 py-1 text-xs">
-                    <span className="text-[var(--c-muted)]">{i + 1}.</span> {ACCOUNT_LABELS[t]}
-                    <button
-                      type="button"
-                      aria-label={`Move ${ACCOUNT_LABELS[t]} earlier`}
-                      className="ml-1 text-[var(--c-muted)] hover:text-[var(--c-ink)] disabled:opacity-30"
-                      disabled={i === 0}
-                      onClick={() => {
-                        const order = [...plan.tax.withdrawalOrder];
-                        [order[i - 1], order[i]] = [order[i], order[i - 1]];
-                        tax({ withdrawalOrder: order });
-                      }}
-                    >←</button>
-                  </span>
+                  <li key={t} className="flex items-center justify-between gap-2 rounded-lg border border-[var(--c-border)] px-2 py-1 text-xs">
+                    <span><span className="text-[var(--c-muted)]">{i + 1}.</span> {ACCOUNT_LABELS[t]}</span>
+                    <span className="flex gap-0.5">
+                      <button
+                        type="button"
+                        aria-label={`Move ${ACCOUNT_LABELS[t]} earlier`}
+                        className="rounded px-1 text-[var(--c-muted)] hover:bg-[var(--c-grid)]/40 hover:text-[var(--c-ink)] disabled:opacity-30 disabled:hover:bg-transparent"
+                        disabled={i === 0}
+                        onClick={() => moveWithdrawal(i, -1)}
+                      >↑</button>
+                      <button
+                        type="button"
+                        aria-label={`Move ${ACCOUNT_LABELS[t]} later`}
+                        className="rounded px-1 text-[var(--c-muted)] hover:bg-[var(--c-grid)]/40 hover:text-[var(--c-ink)] disabled:opacity-30 disabled:hover:bg-transparent"
+                        disabled={i === plan.tax.withdrawalOrder.length - 1}
+                        onClick={() => moveWithdrawal(i, 1)}
+                      >↓</button>
+                    </span>
+                  </li>
                 ))}
-              </div>
+              </ol>
             </div>
             <p className="text-[11px] text-[var(--c-muted)]">
               Not modeled: Roth conversion ladders. Early tax-deferred withdrawals pay the 10%

@@ -30,7 +30,7 @@ test('all seven tabs render their view', async ({ seedApp: page }) => {
   }
 });
 
-test('a blank scenario can be created from the Data menu', async ({ blankApp: page }) => {
+test('a blank scenario can be created from the Backup menu', async ({ blankApp: page }) => {
   await expect(activeScenarioName(page)).toHaveText('New Scenario');
   await expect(page.locator('select[aria-label="Active scenario"] option')).toHaveCount(2);
 });

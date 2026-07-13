@@ -1,7 +1,7 @@
 // Small UI primitives shared across the app. One generic numeric field (with optional
 // paired slider) replaces a dozen near-identical inputs.
 
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 export function Card({ title, subtitle, right, children, className = '' }: {
   title?: ReactNode; subtitle?: string; right?: ReactNode; children: ReactNode; className?: string;
@@ -67,20 +67,32 @@ export function NumField({ label, value, onChange, min, max, step, prefix, suffi
   const display = percent ? Math.round(value * 10000) / 100 : value;
   const [text, setText] = useState(String(display));
   const [focused, setFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     if (!focused) setText(String(display));
   }, [display, focused]);
+  // Select-all once the focus swap (formatted → raw) has rendered: the swap resets any
+  // selection the browser made on focus, which would turn "type to replace" into append.
+  useEffect(() => {
+    if (focused) inputRef.current?.select();
+  }, [focused]);
+
+  // At rest the value reads like a number ("120,000"); focus swaps to raw digits for
+  // editing (F18). Percent fields are small and stay plain. Commas are stripped on
+  // parse so pasting a formatted number still works.
+  const atRest = percent ? String(display) : display.toLocaleString('en-US', { maximumFractionDigits: 10 });
+  const parse = (raw: string) => Number(raw.replace(/,/g, ''));
 
   const commit = (raw: string) => {
     setText(raw);
-    const n = Number(raw);
+    const n = parse(raw);
     if (raw.trim() === '' || !Number.isFinite(n)) return;
     onChange(percent ? n / 100 : n);
   };
 
   const commitFinal = () => {
     setFocused(false);
-    const n = Number(text);
+    const n = parse(text);
     if (text.trim() === '' || !Number.isFinite(n)) {
       setText(String(display));
       return;
@@ -99,9 +111,10 @@ export function NumField({ label, value, onChange, min, max, step, prefix, suffi
       <span className="flex items-center gap-1 rounded-lg border border-[var(--c-border)] bg-[var(--c-page)] px-2 focus-within:border-[var(--c-accent)]">
         {prefix && <span className="text-[var(--c-muted)]">{prefix}</span>}
         <input
+          ref={inputRef}
           className="w-full min-w-0 bg-transparent py-1.5 text-sm outline-none"
           inputMode="decimal"
-          value={text}
+          value={focused ? text : atRest}
           min={min}
           max={max}
           step={step}

@@ -49,9 +49,14 @@ export interface SimState {
   issues: PlanIssue[];
   /** True when FI/success metrics would be vacuous — the UI shows "—" instead. */
   incomplete: boolean;
+  /** Latest KNOWN result — kept (and shown dimmed) while a newer one computes (F12/F14). */
   mc: McResult | null;
   mcProgress: number;
+  /** True when `mc` doesn't yet reflect the current plan (stale or absent). */
+  mcComputing: boolean;
   backtest: BacktestResult | null;
+  /** True when `backtest` doesn't yet reflect the current plan. */
+  btComputing: boolean;
 }
 
 const Ctx = createContext<SimState | null>(null);
@@ -79,13 +84,20 @@ export function SimProvider({ children }: { children: ReactNode }) {
   const [mc, setMc] = useState<McResult | null>(null);
   const [mcProgress, setMcProgress] = useState(0);
   const [backtest, setBacktest] = useState<BacktestResult | null>(null);
+  const [mcDone, setMcDone] = useState(false);
+  const [btDone, setBtDone] = useState(false);
 
   useEffect(() => {
     const cachedMc = mcCache.get(version);
     const cachedBt = btCache.get(version);
-    setMc(cachedMc ?? null);
-    setBacktest(cachedBt ?? null);
+    // Never clear a shown result: the previous one stays (views dim it) until the
+    // fresh one lands — an edited plan reads as "recomputing", not "broken" (F12/F14).
+    if (cachedMc) setMc(cachedMc);
+    if (cachedBt) setBacktest(cachedBt);
+    setMcDone(Boolean(cachedMc));
+    setBtDone(Boolean(cachedBt));
     if (cachedMc && cachedBt) return;
+    if (!cachedMc) setMcProgress(0);
 
     let mcId = 0;
     let btId = 0;
@@ -95,16 +107,17 @@ export function SimProvider({ children }: { children: ReactNode }) {
       if (msg.kind === 'mc' && msg.id === mcId) {
         remember(mcCache, version, msg.result);
         setMc(msg.result);
+        setMcDone(true);
         setMcProgress(1);
       }
       if (msg.kind === 'backtest' && msg.id === btId) {
         remember(btCache, version, msg.result);
         setBacktest(msg.result);
+        setBtDone(true);
       }
     };
     getSimWorker().addEventListener('message', onMessage);
     const timer = window.setTimeout(() => {
-      setMcProgress(0);
       if (!cachedMc) mcId = postSim({ kind: 'mc', plan });
       if (!cachedBt) btId = postSim({ kind: 'backtest', plan });
     }, 400);
@@ -115,8 +128,8 @@ export function SimProvider({ children }: { children: ReactNode }) {
   }, [version, plan]);
 
   const value = useMemo<SimState>(
-    () => ({ plan, ...deterministic, mc, mcProgress, backtest }),
-    [plan, deterministic, mc, mcProgress, backtest],
+    () => ({ plan, ...deterministic, mc, mcProgress, mcComputing: !mcDone, backtest, btComputing: !btDone }),
+    [plan, deterministic, mc, mcProgress, mcDone, backtest, btDone],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

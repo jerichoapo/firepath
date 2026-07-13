@@ -1,20 +1,31 @@
 // Always-visible summary bar: scenario switcher, headline metrics, theme, export/import.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { blankPlan } from '../engine/seed';
 import { makeScenario } from '../engine/seed';
 import { fmtCompact, fmtPct } from '../lib/format';
 import { useNav } from '../store/NavContext';
 import { usePlanStore } from '../store/PlanContext';
 import { useSim } from '../store/SimContext';
-import { Btn } from './ui';
 
-function Metric({ label, value, tone, title }: { label: string; value: string; tone?: 'good' | 'bad'; title?: string }) {
+const ghostBtn = 'rounded-lg border border-[var(--c-border)] px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--c-grid)]/40';
+
+function Metric({ label, value, tone, title, computing }: {
+  label: string; value: string; tone?: 'good' | 'bad'; title?: string;
+  /** Value is stale (a fresh one is computing) — dim it and pulse a dot beside it (F12). */
+  computing?: boolean;
+}) {
   const color = tone === 'good' ? 'text-[var(--c-good)]' : tone === 'bad' ? 'text-[var(--c-bad)]' : '';
   return (
     <div className="min-w-0" title={title}>
       <p className="text-[10px] uppercase tracking-wide text-[var(--c-muted)]">{label}</p>
-      <p className={`truncate text-sm font-semibold tabular-nums ${color}`}>{value}</p>
+      <p
+        data-computing={computing || undefined}
+        className={`truncate text-sm font-semibold tabular-nums transition-opacity ${color} ${computing ? 'opacity-50' : ''}`}
+      >
+        {value}
+        {computing && <span aria-hidden="true" className="ml-1 inline-block animate-pulse text-[var(--c-accent)]">●</span>}
+      </p>
     </div>
   );
 }
@@ -25,12 +36,32 @@ export function Header() {
   const { setTab } = useNav();
   const file = useRef<HTMLInputElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
   // An incomplete plan (no retirement spending) makes FI/success/Coast vacuous — show "—" (F1).
   const dash = sim.incomplete;
 
+  // The open menu closes on outside mousedown or Escape, like every menu the user knows (F11).
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+
   const toggleTheme = () => {
-    const dark = document.documentElement.classList.toggle('dark');
-    localStorage.setItem('firepath-theme', dark ? 'dark' : 'light');
+    const next = document.documentElement.classList.toggle('dark');
+    localStorage.setItem('firepath-theme', next ? 'dark' : 'light');
+    setDark(next);
   };
 
   const download = () => {
@@ -84,8 +115,9 @@ export function Header() {
                 ? `Monte Carlo with your assumptions: μ ${(sim.plan.assumptions.expReturn * 100).toFixed(1)}% real, σ ${(sim.plan.assumptions.returnSd * 100).toFixed(1)}%. Compare all three models on the Monte Carlo tab.`
                 : `Monte Carlo sampling 5-year blocks of 1871–2024 history at your ${Math.round(sim.plan.assumptions.stockAllocation * 100)}% stock allocation. Compare all three models on the Monte Carlo tab.`
             }
-            value={dash ? '—' : sim.mc ? fmtPct(sim.mc.successRate) : `…${Math.round(sim.mcProgress * 100)}%`}
+            value={dash ? '—' : sim.mc ? fmtPct(sim.mc.successRate) : 'computing…'}
             tone={!dash && sim.mc ? (sim.mc.successRate >= 0.8 ? 'good' : sim.mc.successRate < 0.6 ? 'bad' : undefined) : undefined}
+            computing={!dash && sim.mcComputing}
           />
           {dash ? (
             <button
@@ -116,11 +148,30 @@ export function Header() {
           )}
         </div>
 
-        <div className="relative flex items-center gap-1.5">
-          <Btn onClick={toggleTheme} title="Toggle dark mode">◐</Btn>
-          <Btn onClick={() => setMenuOpen((v) => !v)} title="Data menu">Data ▾</Btn>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-pressed={dark}
+            aria-label={dark ? 'Dark theme on — switch to light' : 'Light theme on — switch to dark'}
+            title={dark ? 'Dark theme on — switch to light' : 'Light theme on — switch to dark'}
+            className={ghostBtn}
+          >
+            {dark ? '🌙' : '☀️'}
+          </button>
+          <div className="relative" ref={menuRef}>
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-haspopup="menu"
+            aria-expanded={menuOpen}
+            title="Export, import, and reset"
+            className={ghostBtn}
+          >
+            Backup ▾
+          </button>
           {menuOpen && (
-            <div className="absolute right-0 top-9 z-30 w-52 rounded-xl border border-[var(--c-border)] bg-[var(--c-surface)] p-1.5 shadow-xl">
+            <div role="menu" aria-label="Backup menu" className="absolute right-0 top-9 z-30 w-52 rounded-xl border border-[var(--c-border)] bg-[var(--c-surface)] p-1.5 shadow-xl">
               {[
                 { label: '⬇ Export plan JSON', run: download },
                 { label: '⬆ Import plan JSON', run: () => file.current?.click() },
@@ -149,6 +200,7 @@ export function Header() {
                 <button
                   key={item.label}
                   type="button"
+                  role="menuitem"
                   onClick={item.run}
                   className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs hover:bg-[var(--c-grid)]/40"
                 >
@@ -157,6 +209,7 @@ export function Header() {
               ))}
             </div>
           )}
+          </div>
           <input
             ref={file}
             type="file"

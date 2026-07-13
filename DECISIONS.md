@@ -177,3 +177,19 @@ dashed "Invested (excl. cash)" line the FI number actually compares against, and
 Assumptions card quotes the historical mean/σ at the chosen allocation next to the user's
 own μ/σ. Divergence between the three numbers is presented as information (assumptions vs
 history), never hidden.
+
+## D23. Results linger while recomputing; "computing" is a state, never a fake number
+SimContext keeps the previous Monte Carlo/backtest result when the plan changes and
+exposes `mcComputing`/`btComputing` instead of nulling state: the header dims the stale
+percent and pulses a dot beside it, the gauge/fan chart/histogram/backtest dim in place,
+and nothing unmounts — so editing reads as "recomputing", not "broken", and an
+interpolated progress value can never be mistaken for a result ("…62%" is gone; a plan
+with no prior result says "computing…"). Two interaction conventions land with it:
+NumFields show thousands separators at rest and raw digits while focused (selecting all
+on focus, since the format swap would otherwise collapse the browser's selection and turn
+type-to-replace into append), and expensive knobs clamp at the consumer (MC trials clamp
+in the onChange so a mid-edit value can never send the worker a 50-million-trial job —
+the blur-clamp of D19 is not enough when commit-on-change feeds a worker). The Data menu
+is now "Backup ▾" (export/import/reset is what it holds), closes on outside-mousedown and
+Escape, and uses real menu/menuitem roles; withdrawal order is a vertical ↑/↓ priority
+list; the theme toggle is ☀️/🌙 with `aria-pressed` and a label naming the current state.
