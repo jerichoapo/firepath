@@ -1,7 +1,7 @@
 // Small UI primitives shared across the app. One generic numeric field (with optional
 // paired slider) replaces a dozen near-identical inputs.
 
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 export function Card({ title, subtitle, right, children, className = '' }: {
   title?: ReactNode; subtitle?: string; right?: ReactNode; children: ReactNode; className?: string;
@@ -247,3 +247,130 @@ export const Empty = ({ children }: { children: ReactNode }) => (
     {children}
   </p>
 );
+
+// ---------------------------------------------------------------------------
+// Toast: one slot, auto-dismiss — announces state changes that used to happen
+// silently (scenario switches) and replaces alert() for errors (F15/F17).
+
+interface ToastMsg {
+  text: string;
+  action?: { label: string; run: () => void };
+}
+
+const ToastCtx = createContext<(t: ToastMsg) => void>(() => {});
+
+export function ToastProvider({ children }: { children: ReactNode }) {
+  const [toast, setToast] = useState<ToastMsg | null>(null);
+  const timer = useRef<number | undefined>(undefined);
+  const show = useCallback((t: ToastMsg) => {
+    setToast(t);
+    clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setToast(null), 6000);
+  }, []);
+  return (
+    <ToastCtx.Provider value={show}>
+      {children}
+      {toast && (
+        <div
+          role="status"
+          className="fixed bottom-4 left-1/2 z-40 flex max-w-[92vw] -translate-x-1/2 items-center gap-3 rounded-xl border border-[var(--c-border)] bg-[var(--c-surface)] px-4 py-2.5 text-xs shadow-xl"
+        >
+          <span>{toast.text}</span>
+          {toast.action && (
+            <button
+              type="button"
+              className="whitespace-nowrap font-semibold text-[var(--c-accent)] hover:underline"
+              onClick={() => { toast.action!.run(); setToast(null); }}
+            >
+              {toast.action.label}
+            </button>
+          )}
+          <button
+            type="button"
+            aria-label="Dismiss notification"
+            className="text-[var(--c-muted)] hover:text-[var(--c-ink)]"
+            onClick={() => setToast(null)}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+    </ToastCtx.Provider>
+  );
+}
+
+export const useToast = () => useContext(ToastCtx);
+
+// ---------------------------------------------------------------------------
+// Confirm: an in-page popover that replaces window.confirm — one-click for
+// ordinary deletes, type-to-confirm for full wipes (F17).
+
+export function Confirm({ title, body, confirmLabel = 'Confirm', typeWord, onConfirm, children, className = 'inline-flex' }: {
+  title: string;
+  body?: string;
+  confirmLabel?: string;
+  /** Require typing this word before the confirm button enables (full wipes). */
+  typeWord?: string;
+  onConfirm: () => void;
+  /** Renders the trigger; call the provided function to open the popover. */
+  children: (open: () => void) => ReactNode;
+  /** Wrapper display class — e.g. "block w-full" when the trigger is a menu item. */
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const ref = useRef<HTMLSpanElement>(null);
+  const armed = !typeWord || typed.trim() === typeWord;
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  const confirm = () => {
+    setOpen(false);
+    onConfirm();
+  };
+
+  return (
+    <span ref={ref} className={`relative ${className}`}>
+      {children(() => { setTyped(''); setOpen((v) => !v); })}
+      {open && (
+        <div
+          role="dialog"
+          aria-label={title}
+          className="absolute right-0 top-8 z-40 w-60 rounded-xl border border-[var(--c-border)] bg-[var(--c-surface)] p-3 text-left shadow-xl"
+        >
+          <p className="text-xs font-semibold">{title}</p>
+          {body && <p className="mt-1 text-[11px] leading-relaxed text-[var(--c-muted)]">{body}</p>}
+          {typeWord && (
+            <input
+              autoFocus
+              aria-label={`Type ${typeWord} to confirm`}
+              placeholder={typeWord}
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && armed) confirm(); }}
+              className="mt-2 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-page)] px-2 py-1.5 text-xs uppercase tracking-wide outline-none focus:border-[var(--c-accent)]"
+            />
+          )}
+          <div className="mt-2.5 flex justify-end gap-1.5">
+            <Btn onClick={() => setOpen(false)}>Cancel</Btn>
+            <Btn variant="danger" disabled={!armed} onClick={confirm}>{confirmLabel}</Btn>
+          </div>
+        </div>
+      )}
+    </span>
+  );
+}

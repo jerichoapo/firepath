@@ -2,7 +2,7 @@ import {
   createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef,
   type ReactNode,
 } from 'react';
-import { blankPlan, makeScenario, seedPlan, uid } from '../engine/seed';
+import { blankPlan, makeScenario, nextColor, seedPlan, uid } from '../engine/seed';
 import type { PlanInput, Scenario } from '../engine/types';
 import { saveStore, type StoreState } from './db';
 
@@ -29,12 +29,15 @@ function reducer(state: StoreState, action: Action): StoreState {
             : s,
         ),
       };
-    case 'add':
-      return { ...state, scenarios: [...state.scenarios, action.scenario], activeId: action.scenario.id };
+    case 'add': {
+      // Identity color is assigned here, from the live scenario set — first unused slot.
+      const scenario = { ...action.scenario, color: nextColor(state.scenarios.map((s) => s.color)) };
+      return { ...state, scenarios: [...state.scenarios, scenario], activeId: scenario.id };
+    }
     case 'duplicate': {
       const src = state.scenarios.find((s) => s.id === action.id);
       if (!src) return state;
-      const copy = makeScenario(`${src.name} (copy)`, structuredClone(src.plan));
+      const copy = makeScenario(`${src.name} (copy)`, structuredClone(src.plan), nextColor(state.scenarios.map((s) => s.color)));
       return { ...state, scenarios: [...state.scenarios, copy], activeId: copy.id };
     }
     case 'rename':
@@ -140,6 +143,14 @@ export function PlanProvider({ initial, children }: { initial: StoreState; child
               },
             },
           }));
+          // Exports from before scenarios had identity colors: backfill in palette order.
+          const used = scenarios.map((s) => s.color).filter(Boolean);
+          for (const s of scenarios) {
+            if (!s.color) {
+              s.color = nextColor(used);
+              used.push(s.color);
+            }
+          }
           const activeId = scenarios.some((s) => s.id === data.activeId)
             ? data.activeId!
             : scenarios[0].id;

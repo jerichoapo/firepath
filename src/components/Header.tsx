@@ -7,8 +7,10 @@ import { fmtCompact, fmtPct } from '../lib/format';
 import { useNav } from '../store/NavContext';
 import { usePlanStore } from '../store/PlanContext';
 import { useSim } from '../store/SimContext';
+import { Confirm, useToast } from './ui';
 
 const ghostBtn = 'rounded-lg border border-[var(--c-border)] px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--c-grid)]/40';
+const menuItemCls = 'block w-full rounded-lg px-2.5 py-1.5 text-left text-xs hover:bg-[var(--c-grid)]/40';
 
 function Metric({ label, value, tone, title, computing }: {
   label: string; value: string; tone?: 'good' | 'bad'; title?: string;
@@ -34,6 +36,7 @@ export function Header() {
   const store = usePlanStore();
   const sim = useSim();
   const { setTab } = useNav();
+  const toast = useToast();
   const file = useRef<HTMLInputElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -77,7 +80,7 @@ export function Header() {
   const onImport = async (f: File | undefined) => {
     if (!f) return;
     const err = store.importJson(await f.text());
-    if (err) alert(err);
+    if (err) toast({ text: `⚠ ${err}` });
     setMenuOpen(false);
   };
 
@@ -182,31 +185,41 @@ export function Header() {
                     setMenuOpen(false);
                   },
                 },
-                {
-                  label: '⟳ Reset to demo plan',
-                  run: () => {
-                    if (confirm('Replace ALL scenarios with the demo plan?')) store.resetToSeed();
-                    setMenuOpen(false);
-                  },
-                },
-                {
-                  label: '○ Reset to blank plan',
-                  run: () => {
-                    if (confirm('Replace ALL scenarios with an empty plan?')) store.resetToBlank();
-                    setMenuOpen(false);
-                  },
-                },
               ].map((item) => (
-                <button
-                  key={item.label}
-                  type="button"
-                  role="menuitem"
-                  onClick={item.run}
-                  className="block w-full rounded-lg px-2.5 py-1.5 text-left text-xs hover:bg-[var(--c-grid)]/40"
-                >
+                <button key={item.label} type="button" role="menuitem" onClick={item.run} className={menuItemCls}>
                   {item.label}
                 </button>
               ))}
+              {/* Full wipes are gated behind type-to-confirm — they must not feel like a
+                  benign delete (F17). */}
+              <Confirm
+                title="Replace ALL scenarios with the demo plan?"
+                body="Every scenario on this device is deleted. Export a backup first if in doubt."
+                confirmLabel="Reset"
+                typeWord="RESET"
+                className="block w-full"
+                onConfirm={() => { store.resetToSeed(); setMenuOpen(false); }}
+              >
+                {(open) => (
+                  <button type="button" role="menuitem" onClick={open} className={menuItemCls}>
+                    ⟳ Reset to demo plan
+                  </button>
+                )}
+              </Confirm>
+              <Confirm
+                title="Replace ALL scenarios with an empty plan?"
+                body="Every scenario on this device is deleted. Export a backup first if in doubt."
+                confirmLabel="Reset"
+                typeWord="RESET"
+                className="block w-full"
+                onConfirm={() => { store.resetToBlank(); setMenuOpen(false); }}
+              >
+                {(open) => (
+                  <button type="button" role="menuitem" onClick={open} className={menuItemCls}>
+                    ○ Reset to blank plan
+                  </button>
+                )}
+              </Confirm>
             </div>
           )}
           </div>

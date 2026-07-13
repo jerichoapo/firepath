@@ -7,7 +7,7 @@ import { project, spendingAtAge } from './projection';
 import { bootstrapReturns, fixedReturns, historicalPortfolio, mulberry32, portfolioStats } from './returns';
 import { bracketTax, federalTax, ltcgTax, payrollTax } from './tax';
 import { FEDERAL_2026 } from './taxConfig';
-import { blankPlan, seedPlan } from './seed';
+import { SCENARIO_COLORS, blankPlan, nextColor, seedPlan } from './seed';
 import type { PlanInput } from './types';
 import { isIncomplete, planIssues } from './validate';
 
@@ -356,5 +356,18 @@ describe('plan validity', () => {
     p.accounts.taxable.balance = -50_000;
     p.rothBasis = -1;
     expect(planIssues(p).map((i) => i.code)).toEqual(['negative-balance', 'negative-balance']);
+  });
+});
+
+describe('scenario identity colors', () => {
+  it('assigns the first unused palette slot', () => {
+    expect(nextColor([])).toBe(SCENARIO_COLORS[0]);
+    expect(nextColor([SCENARIO_COLORS[0]])).toBe(SCENARIO_COLORS[1]);
+    // A freed middle slot is reused before extending — deletion never shifts survivors.
+    expect(nextColor([SCENARIO_COLORS[0], SCENARIO_COLORS[2]])).toBe(SCENARIO_COLORS[1]);
+  });
+
+  it('cycles once the palette is exhausted', () => {
+    expect(nextColor([...SCENARIO_COLORS])).toBe(SCENARIO_COLORS[0]);
   });
 });

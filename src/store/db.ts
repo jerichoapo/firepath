@@ -2,7 +2,7 @@
 // for the active scenario id. All data stays on this machine.
 
 import Dexie, { type EntityTable } from 'dexie';
-import { makeScenario, seedPlan } from '../engine/seed';
+import { makeScenario, nextColor, seedPlan } from '../engine/seed';
 import type { Scenario } from '../engine/types';
 
 interface MetaRow {
@@ -40,6 +40,15 @@ export async function loadStore(): Promise<StoreState> {
     await db.scenarios.put(seed);
     await db.meta.put({ key: 'activeId', value: seed.id });
     scenarios = [seed];
+  }
+  // Stores written before scenarios had identity colors: backfill in palette order.
+  // The next autosave persists the assignment.
+  const used = scenarios.map((s) => s.color).filter(Boolean);
+  for (const s of scenarios) {
+    if (!s.color) {
+      s.color = nextColor(used);
+      used.push(s.color);
+    }
   }
   const activeId = (await db.meta.get('activeId'))?.value ?? scenarios[0].id;
   const active = scenarios.some((s) => s.id === activeId) ? activeId : scenarios[0].id;

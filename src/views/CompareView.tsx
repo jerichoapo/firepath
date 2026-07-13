@@ -9,22 +9,67 @@ import { project } from '../engine/projection';
 import { fixedReturns } from '../engine/returns';
 import { isIncomplete, planIssues } from '../engine/validate';
 import { blankPlan, makeScenario } from '../engine/seed';
+import type { PlanInput } from '../engine/types';
 import { fmtCompact, fmtPct } from '../lib/format';
 import { ChartTip, axisProps, gridProps, moneyAxis } from '../components/charts/chartTheme';
-import { Btn, Card, Empty } from '../components/ui';
+import { Btn, Card, Confirm, Empty, useToast } from '../components/ui';
+import { useNav } from '../store/NavContext';
 import { usePlanStore } from '../store/PlanContext';
 import { useScenarioMcs } from '../store/SimContext';
 
-/** Fixed categorical order for scenario lines (validated palette slots). */
-const SCENARIO_COLORS = ['#2a78d6', '#1baf7a', '#eda100', '#4a3aa7', '#e34948', '#e87ba4', '#eb6834', '#008300'];
-export const scenarioColor = (i: number) => SCENARIO_COLORS[i % SCENARIO_COLORS.length];
-
 const CHECK_AGES = [45, 50, 65];
+
+/** Duplicate-with-a-tweak presets: the classic "what if I'm wrong about…" checks (F25). */
+const STRESS_PRESETS: { label: string; suffix: string; tweak: (p: PlanInput) => PlanInput }[] = [
+  {
+    label: 'SS −25%',
+    suffix: 'SS −25%',
+    tweak: (p) => ({
+      ...p,
+      socialSecurity: {
+        ...p.socialSecurity,
+        annual: Math.round(p.socialSecurity.annual * 0.75),
+        partner: p.socialSecurity.partner
+          ? { ...p.socialSecurity.partner, annual: Math.round(p.socialSecurity.partner.annual * 0.75) }
+          : undefined,
+      },
+    }),
+  },
+  {
+    label: 'Returns −1%',
+    suffix: 'returns −1%',
+    tweak: (p) => ({
+      ...p,
+      assumptions: { ...p.assumptions, expReturn: p.assumptions.expReturn - 0.01 },
+    }),
+  },
+  {
+    label: 'Spending +10%',
+    suffix: 'spending +10%',
+    tweak: (p) => ({
+      ...p,
+      expenses: {
+        ...p.expenses,
+        currentAnnual: Math.round(p.expenses.currentAnnual * 1.1),
+        phases: p.expenses.phases.map((ph) => ({ ...ph, annual: Math.round(ph.annual * 1.1) })),
+      },
+    }),
+  },
+];
 
 export function CompareView() {
   const store = usePlanStore();
   const mcs = useScenarioMcs(store.scenarios);
+  const toast = useToast();
+  const { setTab } = useNav();
   const [renaming, setRenaming] = useState<string | null>(null);
+
+  // Announce the active-scenario switch that add/duplicate performs (F15).
+  const announce = (name: string) =>
+    toast({
+      text: `Now editing "${name}" — change something, then come back to compare.`,
+      action: { label: 'Edit plan →', run: () => setTab('plan') },
+    });
 
   const rows = useMemo(
     () =>
@@ -67,20 +112,27 @@ export function CompareView() {
         title="Scenarios"
         subtitle="Each scenario is a full, independently editable copy of the plan"
         right={
-          <Btn variant="primary" onClick={() => store.dispatch({ type: 'add', scenario: makeScenario(`Scenario ${store.scenarios.length + 1}`, blankPlan(new Date().getFullYear())) })}>
+          <Btn
+            variant="primary"
+            onClick={() => {
+              const name = `Scenario ${store.scenarios.length + 1}`;
+              store.dispatch({ type: 'add', scenario: makeScenario(name, blankPlan(new Date().getFullYear())) });
+              announce(name);
+            }}
+          >
             + New blank
           </Btn>
         }
       >
         <div className="flex flex-wrap gap-2">
-          {store.scenarios.map((s, i) => (
+          {store.scenarios.map((s) => (
             <div
               key={s.id}
               className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-xs ${
                 s.id === store.active.id ? 'border-[var(--c-accent)] bg-[var(--c-accent)]/10' : 'border-[var(--c-border)]'
               }`}
             >
-              <span className="h-2.5 w-2.5 rounded-full" style={{ background: scenarioColor(i) }} />
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: s.color }} />
               {renaming === s.id ? (
                 <input
                   autoFocus
@@ -95,15 +147,49 @@ export function CompareView() {
                   {s.name}
                 </button>
               )}
-              <button type="button" className="text-[var(--c-muted)] hover:text-[var(--c-ink)]" title="Rename" onClick={() => setRenaming(s.id)}>✎</button>
-              <button type="button" className="text-[var(--c-muted)] hover:text-[var(--c-ink)]" title="Duplicate — then edit the copy" onClick={() => store.dispatch({ type: 'duplicate', id: s.id })}>⧉</button>
+              {s.id === store.active.id && (
+                <button
+                  type="button"
+                  className="whitespace-nowrap font-semibold text-[var(--c-accent)] hover:underline"
+                  onClick={() => setTab('plan')}
+                >
+                  Edit plan →
+                </button>
+              )}
+              <button type="button" aria-label={`Rename ${s.name}`} className="text-[var(--c-muted)] hover:text-[var(--c-ink)]" title="Rename" onClick={() => setRenaming(s.id)}>✎</button>
               <button
                 type="button"
-                className="text-[var(--c-muted)] hover:text-[var(--c-bad)]"
-                title="Delete"
-                onClick={() => confirm(`Delete scenario "${s.name}"?`) && store.dispatch({ type: 'delete', id: s.id })}
-              >✕</button>
+                aria-label={`Duplicate ${s.name}`}
+                className="text-[var(--c-muted)] hover:text-[var(--c-ink)]"
+                title="Duplicate — then edit the copy"
+                onClick={() => { store.dispatch({ type: 'duplicate', id: s.id }); announce(`${s.name} (copy)`); }}
+              >⧉</button>
+              <Confirm
+                title={`Delete "${s.name}"?`}
+                confirmLabel="Delete"
+                onConfirm={() => store.dispatch({ type: 'delete', id: s.id })}
+              >
+                {(open) => (
+                  <button type="button" aria-label={`Delete ${s.name}`} className="text-[var(--c-muted)] hover:text-[var(--c-bad)]" title="Delete" onClick={open}>✕</button>
+                )}
+              </Confirm>
             </div>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-[var(--c-border)] pt-3">
+          <span className="mr-1 text-[11px] text-[var(--c-muted)]">Stress-test the active plan:</span>
+          {STRESS_PRESETS.map((preset) => (
+            <Btn
+              key={preset.label}
+              title={`Duplicate "${store.active.name}" with ${preset.suffix} applied`}
+              onClick={() => {
+                const name = `${store.active.name} — ${preset.suffix}`;
+                store.dispatch({ type: 'add', scenario: makeScenario(name, preset.tweak(structuredClone(store.plan))) });
+                announce(name);
+              }}
+            >
+              {preset.label}
+            </Btn>
           ))}
         </div>
         <p className="mt-2 text-[11px] text-[var(--c-muted)]">
@@ -126,10 +212,10 @@ export function CompareView() {
               </tr>
             </thead>
             <tbody>
-              {rows.map(({ scenario: s, ...r }, i) => (
+              {rows.map(({ scenario: s, ...r }) => (
                 <tr key={s.id} className={`border-b border-[var(--c-grid)]/60 ${s.id === store.active.id ? 'bg-[var(--c-accent)]/5' : ''}`}>
                   <td className="py-2 text-left font-medium">
-                    <span className="mr-1.5 inline-block h-2 w-2 rounded-full" style={{ background: scenarioColor(i) }} />
+                    <span className="mr-1.5 inline-block h-2 w-2 rounded-full" style={{ background: s.color }} />
                     {s.name}
                   </td>
                   {/* An incomplete scenario (no spending) would report vacuous FI/success — dash it. */}
@@ -164,12 +250,12 @@ export function CompareView() {
               <YAxis {...moneyAxis} />
               <Tooltip content={<ChartTip titleFmt={(age) => `Age ${age}`} />} />
               <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
-              {store.scenarios.map((s, i) => (
+              {store.scenarios.map((s) => (
                 <Line
                   key={s.id}
                   dataKey={s.id}
                   name={s.name}
-                  stroke={scenarioColor(i)}
+                  stroke={s.color}
                   strokeWidth={2}
                   dot={false}
                   connectNulls

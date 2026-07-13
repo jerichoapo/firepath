@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Header } from './components/Header';
-import { Btn } from './components/ui';
+import { Btn, ToastProvider } from './components/ui';
 import { loadStore, type StoreState } from './store/db';
 import { NavProvider, useNav, type TabId } from './store/NavContext';
 import { PlanProvider, usePlanStore } from './store/PlanContext';
@@ -37,7 +37,9 @@ export default function App() {
     <PlanProvider initial={store}>
       <SimProvider>
         <NavProvider>
-          <Shell />
+          <ToastProvider>
+            <Shell />
+          </ToastProvider>
         </NavProvider>
       </SimProvider>
     </PlanProvider>

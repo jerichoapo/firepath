@@ -151,6 +151,8 @@ export interface Scenario {
   name: string;
   createdAt: number;
   updatedAt: number;
+  /** Chart identity color, assigned at creation and never reassigned (D25). */
+  color: string;
   plan: PlanInput;
 }
 

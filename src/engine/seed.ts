@@ -95,10 +95,19 @@ export function seedPlan(startYear: number): PlanInput {
   };
 }
 
-export const makeScenario = (name: string, plan: PlanInput): Scenario => ({
+/** Fixed categorical palette for scenario identity (validated slots, in order). */
+export const SCENARIO_COLORS = ['#2a78d6', '#1baf7a', '#eda100', '#4a3aa7', '#e34948', '#e87ba4', '#eb6834', '#008300'];
+
+/** First palette slot not yet in use — color follows the scenario, never its index (D25). */
+export function nextColor(used: string[]): string {
+  return SCENARIO_COLORS.find((c) => !used.includes(c)) ?? SCENARIO_COLORS[used.length % SCENARIO_COLORS.length];
+}
+
+export const makeScenario = (name: string, plan: PlanInput, color: string = SCENARIO_COLORS[0]): Scenario => ({
   id: uid(),
   name,
   createdAt: Date.now(),
   updatedAt: Date.now(),
+  color,
   plan,
 });

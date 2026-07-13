@@ -210,3 +210,17 @@ aria-expanded + aria-describedby wired); `title` remains only as a hover bonus (
 Hard-won a11y note: a <button> inside a <label> is a labelable element and silently
 steals the label's implicit association, unnaming the input — NumField now wires
 htmlFor/id explicitly and puts aria-label on the input itself.
+
+## D25. Scenario color is identity, stored at creation; consequences are proportionate
+`Scenario.color` is assigned when the scenario is born — first unused palette slot,
+cycling only past 8 — and never reassigned: deleting a scenario cannot repaint the
+survivors in the compare table or overlay chart (the app's own chart rule, F19). Stores
+and JSON exports from before the field existed are backfilled in palette order on
+load/import. Workflow feedback follows suit (F15/F17/F25): add/duplicate/stress-preset
+announce the silent active-scenario switch with a single-slot auto-dismissing toast
+carrying an "Edit plan →" jump (the active chip carries the same link); native
+confirm()/alert() are gone — scenario delete is a one-click Confirm popover, while the
+two full-store resets require typing RESET, because a wipe must not feel like a benign
+delete; import errors surface as a toast. Stress presets (SS −25%, returns −1%,
+spending +10%) duplicate the active scenario with the tweak applied and a suffixed name —
+pure showcases of the existing compare machinery.
