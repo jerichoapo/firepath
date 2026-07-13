@@ -193,3 +193,20 @@ the blur-clamp of D19 is not enough when commit-on-change feeds a worker). The D
 is now "Backup ▾" (export/import/reset is what it holds), closes on outside-mousedown and
 Escape, and uses real menu/menuitem roles; withdrawal order is a vertical ↑/↓ priority
 list; the theme toggle is ☀️/🌙 with `aria-pressed` and a label naming the current state.
+
+## D24. The Plan tab leads with levers; help is focusable; basis is a disclosure
+A "Quick levers" strip tops the Plan tab: retirement age (slider from current age to 80),
+spending in retirement, expected return — with the projected FI age and success rate
+rendered beside them so the "what if I retire at X?" loop happens in one glance. The
+spending lever edits the number the FI bar is actually priced from — the spending phase
+governing retirement age, or current spending when no phase covers it — because editing
+`currentAnnual` would visibly do nothing on any plan with a retirement phase (the demo).
+Retirement age and expected return are the same fields as in Household/Assumptions, both
+places patch the same value. Cost-basis fields sit behind an "Advanced: basis tracking"
+disclosure whose open-state lives in sessionStorage — persistent across tab switches,
+not a forever-flag (F6). Caveats moved from hover-only `title` attributes to a focusable
+`Help` ⓘ button opening a popover (Enter/click toggles, Escape/outside closes,
+aria-expanded + aria-describedby wired); `title` remains only as a hover bonus (F28).
+Hard-won a11y note: a <button> inside a <label> is a labelable element and silently
+steals the label's implicit association, unnaming the input — NumField now wires
+htmlFor/id explicitly and puts aria-label on the input itself.

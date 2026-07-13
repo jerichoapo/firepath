@@ -1,8 +1,10 @@
 // The plan editor: every input in the model, grouped into cards, with a live
 // projection preview in a sticky rail. Charts everywhere update as you type/drag.
 
+import { useState } from 'react';
 import { ACCOUNT_LABELS, ACCOUNT_TYPES, type AccountInput, type AccountType, type Assumptions, type ExpensesInput, type IncomeStream, type PlanInput, type Profile, type TaxSettings } from '../engine/types';
 import { savingsRate } from '../engine/metrics';
+import { spendingAtAge } from '../engine/projection';
 import { portfolioStats } from '../engine/returns';
 import { uid } from '../engine/seed';
 import { fmtCompact, fmtPct } from '../lib/format';
@@ -38,6 +40,26 @@ export function PlanView() {
     tax({ withdrawalOrder: order });
   };
 
+  // The spending lever edits the number the FI bar is priced from: whatever spending
+  // level is in force at retirement age — the governing phase, or currentAnnual when
+  // no phase covers retirement (F13).
+  const retirementSpend = spendingAtAge(plan, plan.profile.retireAge);
+  const setRetirementSpend = (v: number) => {
+    const governing = [...plan.expenses.phases]
+      .sort((a, b) => a.fromAge - b.fromAge)
+      .filter((p) => p.fromAge <= plan.profile.retireAge)
+      .at(-1);
+    if (governing) {
+      expenses({ phases: plan.expenses.phases.map((p) => (p.id === governing.id ? { ...p, annual: v } : p)) });
+    } else {
+      expenses({ currentAnnual: v });
+    }
+  };
+
+  // Basis disclosure open-state survives tab switches for the rest of the browser
+  // session, without becoming a forever-flag (F6).
+  const [basisOpen, setBasisOpen] = useState(() => sessionStorage.getItem('firepath-basis-open') === '1');
+
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
       {!flags.orientationDismissed && (
@@ -62,6 +84,56 @@ export function PlanView() {
           </ul>
         </div>
       )}
+
+      {/* Quick levers (F13): the three inputs that move the plan most, with the verdict
+          right beside them — the "what if I retire at X?" loop lives here. */}
+      <Card
+        title="Quick levers"
+        subtitle="The three inputs that move the plan most — the verdict reacts as you drag"
+        className="lg:col-span-3"
+      >
+        <div className="grid items-end gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto]">
+          <NumField
+            label="Retire at age"
+            value={plan.profile.retireAge}
+            onChange={(v) => profile({ retireAge: Math.round(v) })}
+            slider={[plan.profile.currentAge, 80, 1]}
+            help="Planned contributions stop and retirement spending starts here. The same field as Household's Full retirement age."
+          />
+          <NumField
+            label="Spending in retirement"
+            prefix="$"
+            min={0}
+            value={retirementSpend}
+            onChange={setRetirementSpend}
+            slider={[0, 300_000, 5_000]}
+            help="The spending level in force at your retirement age — the FI number is this × your FI multiplier. Edits the spending phase that covers retirement, or current spending if none does."
+          />
+          <NumField
+            label="Expected return"
+            suffix="%"
+            percent
+            value={plan.assumptions.expReturn}
+            onChange={(v) => assume({ expReturn: v })}
+            slider={[0, 12, 0.1]}
+            help="Real (after-inflation) mean return — the same knob as in Assumptions."
+          />
+          <div className="min-w-44 rounded-lg bg-[var(--c-page)] px-3 py-2">
+            <p className="flex items-baseline justify-between gap-3 text-xs">
+              <span className="text-[var(--c-muted)]">Projected FI</span>
+              <b className="tabular-nums">
+                {sim.incomplete ? '—' : sim.fiAgeVal != null ? `Age ${sim.fiAgeVal}` : 'Not reached'}
+              </b>
+            </p>
+            <p className="mt-1 flex items-baseline justify-between gap-3 text-xs">
+              <span className="text-[var(--c-muted)]">Success</span>
+              <b className={`tabular-nums transition-opacity ${sim.mcComputing && !sim.incomplete ? 'opacity-50' : ''}`}>
+                {sim.incomplete ? '—' : sim.mc ? fmtPct(sim.mc.successRate) : 'computing…'}
+              </b>
+            </p>
+          </div>
+        </div>
+      </Card>
       <div className="grid grid-cols-1 content-start gap-4 lg:col-span-2 xl:grid-cols-2">
         <Card title="Household" subtitle="Ages drive the whole timeline">
           <div className={`${rowGrid} grid-cols-2`}>
@@ -77,7 +149,7 @@ export function PlanView() {
             {plan.profile.partnerAge != null && (
               <NumField label="Partner age" value={plan.profile.partnerAge} onChange={(v) => profile({ partnerAge: Math.round(v) })} min={16} max={90} help="Sets when partner Social Security begins — their claim age is keyed to their own age." />
             )}
-            <NumField label="Full retirement age" value={plan.profile.retireAge} onChange={(v) => profile({ retireAge: Math.round(v) })} help="Planned contributions stop here; the FI number uses spending at this age." />
+            <NumField label="Full retirement age" value={plan.profile.retireAge} onChange={(v) => profile({ retireAge: Math.round(v) })} slider={[plan.profile.currentAge, 80, 1]} help="Planned contributions stop here; the FI number uses spending at this age. Also on the Quick levers strip — both edit the same field." />
             <NumField label="Life expectancy" value={plan.profile.lifeExpectancy} onChange={(v) => profile({ lifeExpectancy: Math.round(v) })} min={plan.profile.currentAge + 1} max={110} />
           </div>
         </Card>
@@ -97,10 +169,29 @@ export function PlanView() {
                 <NumField label="" prefix="$" min={0} value={plan.accounts[t].contribution} onChange={(v) => account(t, { contribution: v })} />
               </div>
             ))}
-            <div className={`${rowGrid} mt-1 grid-cols-2`}>
-              <NumField label="Taxable cost basis" prefix="$" min={0} value={plan.taxableCostBasis} onChange={(v) => patch('taxableCostBasis', v)} help="What you paid for the taxable balance — gains above it are taxed on withdrawal." />
-              <NumField label="Roth contribution basis" prefix="$" min={0} value={plan.rothBasis} onChange={(v) => patch('rothBasis', v)} help="Lifetime Roth contributions — withdrawable any time without tax or penalty." />
-            </div>
+            {/* Basis is a tax-nerd concept; it shouldn't ambush someone typing in their
+                first balances (F6). */}
+            <details
+              className="mt-1"
+              open={basisOpen}
+              onToggle={(e) => {
+                const open = e.currentTarget.open;
+                setBasisOpen(open);
+                sessionStorage.setItem('firepath-basis-open', open ? '1' : '0');
+              }}
+            >
+              <summary className="cursor-pointer select-none text-xs font-medium text-[var(--c-ink-2)] hover:text-[var(--c-ink)]">
+                Advanced: basis tracking
+              </summary>
+              <p className="mb-2 mt-1.5 text-[11px] leading-relaxed text-[var(--c-muted)]">
+                Used to estimate taxes when you sell taxable shares or withdraw Roth contributions
+                early. Fine to leave as-is until you care about tax precision.
+              </p>
+              <div className={`${rowGrid} grid-cols-2`}>
+                <NumField label="Taxable cost basis" prefix="$" min={0} value={plan.taxableCostBasis} onChange={(v) => patch('taxableCostBasis', v)} help="What you paid for the taxable balance — gains above it are taxed on withdrawal." />
+                <NumField label="Roth contribution basis" prefix="$" min={0} value={plan.rothBasis} onChange={(v) => patch('rothBasis', v)} help="Lifetime Roth contributions — withdrawable any time without tax or penalty." />
+              </div>
+            </details>
           </div>
         </Card>
 

@@ -1,7 +1,7 @@
 // Small UI primitives shared across the app. One generic numeric field (with optional
 // paired slider) replaces a dozen near-identical inputs.
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 
 export function Card({ title, subtitle, right, children, className = '' }: {
   title?: ReactNode; subtitle?: string; right?: ReactNode; children: ReactNode; className?: string;
@@ -45,6 +45,58 @@ export function Btn({ children, onClick, variant = 'ghost', title, disabled }: {
 }
 
 /**
+ * Focusable help affordance (F28): an ⓘ button that opens a small popover on
+ * click/Enter/Space, closing on Escape or outside mousedown. This is the accessible
+ * channel for caveats — `title` attributes elsewhere are a hover-only bonus.
+ */
+export function Help({ text, label }: { text: string; label?: string }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const ref = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <span ref={ref} className="relative inline-flex">
+      <button
+        type="button"
+        aria-label={label ? `About ${label}` : 'More info'}
+        aria-expanded={open}
+        aria-describedby={open ? id : undefined}
+        // preventDefault: inside a <label>, the click must not activate the labeled input.
+        onClick={(e) => { e.preventDefault(); setOpen((v) => !v); }}
+        className="grid h-4 w-4 place-items-center rounded-full text-[11px] leading-none text-[var(--c-muted)] hover:text-[var(--c-accent)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--c-accent)]"
+      >
+        ⓘ
+      </button>
+      {open && (
+        <span
+          role="tooltip"
+          id={id}
+          className="absolute right-0 top-5 z-30 w-60 rounded-lg border border-[var(--c-border)] bg-[var(--c-surface)] p-2.5 text-left text-[11px] font-normal normal-case leading-relaxed tracking-normal text-[var(--c-ink-2)] shadow-xl"
+        >
+          {text}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
  * Numeric input that tolerates in-progress typing ("", "-", "1e") by keeping local text
  * and committing parsed values. `percent` fields display ×100. Optional paired slider.
  * `min`/`max` are in DISPLAY units (like `slider`); typing commits unclamped so partial
@@ -68,6 +120,10 @@ export function NumField({ label, value, onChange, min, max, step, prefix, suffi
   const [text, setText] = useState(String(display));
   const [focused, setFocused] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Explicit association + aria-label: the Help ⓘ is a labelable <button> inside this
+  // <label>, which would otherwise steal the implicit association and leave the input
+  // unnamed for assistive tech.
+  const id = useId();
   useEffect(() => {
     if (!focused) setText(String(display));
   }, [display, focused]);
@@ -103,15 +159,17 @@ export function NumField({ label, value, onChange, min, max, step, prefix, suffi
   };
 
   return (
-    <label className="block text-xs" title={help}>
+    <label htmlFor={id} className="block text-xs" title={help}>
       <span className="mb-1 flex items-center justify-between text-[var(--c-ink-2)]">
         {label}
-        {help && <span className="cursor-help text-[var(--c-muted)]">ⓘ</span>}
+        {help && <Help text={help} label={label} />}
       </span>
       <span className="flex items-center gap-1 rounded-lg border border-[var(--c-border)] bg-[var(--c-page)] px-2 focus-within:border-[var(--c-accent)]">
         {prefix && <span className="text-[var(--c-muted)]">{prefix}</span>}
         <input
           ref={inputRef}
+          id={id}
+          aria-label={label || undefined}
           className="w-full min-w-0 bg-transparent py-1.5 text-sm outline-none"
           inputMode="decimal"
           value={focused ? text : atRest}
