@@ -1,5 +1,7 @@
 # 🔥 FirePath
 
+[![CI](https://github.com/jerichoapo/firepath/actions/workflows/ci.yml/badge.svg)](https://github.com/jerichoapo/firepath/actions/workflows/ci.yml)
+
 A **local-first financial independence (FIRE) planner** — model your financial future,
 stress-test it against 150 years of market history, and compare competing life scenarios,
 entirely on your own machine.
@@ -23,9 +25,12 @@ The app opens with a generic demo household so every feature has something to sh
 Replace the numbers with your own, or use **Backup ▾ → Reset to blank plan**.
 
 ```bash
-npm test           # engine unit tests (vitest)
+npm test           # engine + store unit tests (vitest)
+npm run e2e        # full Playwright suite (reuses a running dev server)
 npm run build      # typecheck + production build
 ```
+
+CI runs all three on every push (`.github/workflows/ci.yml`).
 
 ## What it does
 

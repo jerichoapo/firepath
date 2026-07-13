@@ -20,10 +20,12 @@ export async function wipeDb(page: Page): Promise<void> {
   );
 }
 
-/** Navigate to the app and wait until it has loaded past the store-loading screen. */
+/** Navigate to the app and wait until it has loaded past the store-loading screen.
+ *  Generous timeout: a cold vite dev-server load under full parallel-worker CPU load
+ *  can exceed the 5s expect default. */
 export async function loadApp(page: Page): Promise<void> {
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'FirePath', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'FirePath', exact: true })).toBeVisible({ timeout: 15_000 });
 }
 
 interface AppFixtures {
@@ -102,7 +104,7 @@ export async function waitForFlag(page: Page, key: string): Promise<void> {
 /** Reload and wait for the app to be interactive again. */
 export async function reloadApp(page: Page): Promise<void> {
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'FirePath', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'FirePath', exact: true })).toBeVisible({ timeout: 15_000 });
 }
 
 export { expect };

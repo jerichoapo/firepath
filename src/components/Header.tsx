@@ -79,7 +79,15 @@ export function Header() {
 
   const onImport = async (f: File | undefined) => {
     if (!f) return;
-    const err = store.importJson(await f.text());
+    let text: string;
+    try {
+      text = await f.text();
+    } catch {
+      toast({ text: '⚠ Could not read that file.' });
+      setMenuOpen(false);
+      return;
+    }
+    const err = store.importJson(text);
     if (err) toast({ text: `⚠ ${err}` });
     setMenuOpen(false);
   };
@@ -228,7 +236,15 @@ export function Header() {
             type="file"
             accept="application/json"
             className="hidden"
-            onChange={(e) => void onImport(e.target.files?.[0])}
+            onChange={(e) => {
+              // Read fully BEFORE resetting: clearing the input releases the FileList,
+              // and an in-flight f.text() can then die racing Chromium's cleanup.
+              // Reset after (win or lose) so re-selecting the same fixed file fires again.
+              const input = e.currentTarget;
+              void onImport(input.files?.[0]).finally(() => {
+                input.value = '';
+              });
+            }}
           />
         </div>
       </div>

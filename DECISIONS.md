@@ -241,3 +241,20 @@ The 🎲 "new draw" bumps the MC seed in SimContext state only — reload always
 the fixed DEFAULT_SEED, so shared plans and tests stay reproducible while curiosity about
 seed-luck gets a one-click answer (F10). Compare/alt cache keys carry the seed suffix so
 the P3 cache-sharing symmetry survives.
+
+## D27. Import is schema-checked and rebuilt; saves flush on pagehide; CI is the gate
+JSON import is the one untrusted input path, and replaceAll + the debounced autosave
+means a bad file that gets past parsing is *persisted over the user's data*. parseExport
+(src/store/import.ts) validates and REBUILDS every field (whitelist — unknown keys are
+dropped), rejecting with the exact path ("scenarios[0].plan.accounts.taxable.balance
+should be a finite number") rather than coercing; only metadata is repaired (timestamps,
+pre-D25 missing colors, a stale activeId; the Infinity bracket revival lives here too).
+Hardening the path surfaced two real races the e2e suite then pinned: (1) resetting the
+file input before the async read lets Chromium's FileList cleanup kill f.text() — read
+first, reset after, toast on read failure; (2) any edit made within 400ms of leaving the
+page — including a whole import — died with the debounced autosave, so PlanProvider now
+flushes the pending save on pagehide/visibilitychange-hidden. Tests never rely on that
+flush: reload-and-check tests poll IndexedDB for the persisted state first (the
+waitForFlag pattern, generalized). GitHub Actions runs build + vitest + the full
+Playwright suite on every push; the vite dev server ignores test-artifact directories so
+suite runs can't perturb the server they run against.

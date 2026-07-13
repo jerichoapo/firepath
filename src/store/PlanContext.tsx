@@ -5,6 +5,7 @@ import {
 import { blankPlan, makeScenario, nextColor, seedPlan, uid } from '../engine/seed';
 import type { PlanInput, Scenario } from '../engine/types';
 import { saveStore, type StoreState } from './db';
+import { parseExport } from './import';
 
 type Action =
   | { type: 'select'; id: string }
@@ -96,6 +97,26 @@ export function PlanProvider({ initial, children }: { initial: StoreState; child
     return () => clearTimeout(timer.current);
   }, [state]);
 
+  // Flush the pending save when the page goes away — otherwise an edit (or a whole
+  // import) made in the 400ms before closing the tab is silently lost.
+  const latest = useRef(state);
+  latest.current = state;
+  useEffect(() => {
+    const flush = () => {
+      clearTimeout(timer.current);
+      void saveStore(latest.current);
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
+
   const update = useCallback(
     (fn: (plan: PlanInput) => PlanInput) => dispatch({ type: 'updatePlan', update: fn }),
     [],
@@ -124,41 +145,12 @@ export function PlanProvider({ initial, children }: { initial: StoreState; child
           2,
         ),
       importJson: (text) => {
-        try {
-          const data = JSON.parse(text) as { app?: string; scenarios?: Scenario[]; activeId?: string };
-          if (data.app !== 'firepath' || !Array.isArray(data.scenarios) || data.scenarios.length === 0) {
-            return 'Not a FirePath export file.';
-          }
-          // JSON has no Infinity: the top state bracket round-trips as null — revive it.
-          const scenarios = data.scenarios.map((s) => ({
-            ...s,
-            plan: {
-              ...s.plan,
-              tax: {
-                ...s.plan.tax,
-                stateBrackets: s.plan.tax.stateBrackets.map((b) => ({
-                  ...b,
-                  upTo: b.upTo == null ? Infinity : b.upTo,
-                })),
-              },
-            },
-          }));
-          // Exports from before scenarios had identity colors: backfill in palette order.
-          const used = scenarios.map((s) => s.color).filter(Boolean);
-          for (const s of scenarios) {
-            if (!s.color) {
-              s.color = nextColor(used);
-              used.push(s.color);
-            }
-          }
-          const activeId = scenarios.some((s) => s.id === data.activeId)
-            ? data.activeId!
-            : scenarios[0].id;
-          dispatch({ type: 'replaceAll', state: { scenarios, activeId } });
-          return null;
-        } catch {
-          return 'Could not parse that file as JSON.';
-        }
+        // Every field is schema-checked and rebuilt before it can reach replaceAll —
+        // the autosave would otherwise persist a corrupted store (D27).
+        const parsed = parseExport(text);
+        if (!parsed.ok) return parsed.error;
+        dispatch({ type: 'replaceAll', state: { scenarios: parsed.scenarios, activeId: parsed.activeId } });
+        return null;
       },
       resetToSeed: () => {
         const seed = makeScenario('Demo Plan', seedPlan(new Date().getFullYear()));
