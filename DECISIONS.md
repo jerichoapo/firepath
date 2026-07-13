@@ -279,3 +279,22 @@ card counts shortfall years across the whole working span and names the first on
 Chart-visible lesson: contribution edits mostly REALLOCATE money between accounts
 (surplus already sweeps to taxable), so their honest observable is the per-year Saved
 cell / taxes, not $M-rounded net-worth readouts.
+
+## D29. Every plan field carries an enforced efficacy classification
+src/engine/sensitivity.test.ts walks the actual leaf shape of the seed plan and fails on
+any field that is not classified as EFFECTIVE (perturbing it must move a named
+observable: deterministic rows, metrics, normal MC, bootstrap MC, plan-config MC,
+backtest, or the milestones artifact), INERT with a documented reason (inflation is
+reference copy per D20; stream/expense names are labels), or IDENTITY (ids). A new
+field cannot ship without declaring its job, and a wiring regression fails the suite.
+The frozen lists are scope-isolation guarantees: returnSd must not move the
+deterministic path or the backtest; stockAllocation moves bootstrap MC + backtest but
+never normal MC; fiMultiplier reprices the FI target without touching the simulation;
+currentAnnual moves the plan but not the FI number (the retirement phase governs it).
+Observables must mirror the app's wiring — the harness's own first catch was itself
+hard-coding fixedReturns(0.05) where SimContext feeds plan.assumptions.expReturn, and
+its second was perturbing mc.runs below MC_MIN_RUNS so both sides clamped equal.
+e2e/input-impact.spec.ts adds the UI layer: one test per Plan-tab card drives real
+inputs and asserts a cheap deterministic readout moves (plus the card's negative
+assertion); sub-rounding effects (cost basis, cash return) are unit-harness-only —
+asserting them through $M-rounded readouts would test display rounding, not wiring.
