@@ -298,3 +298,23 @@ e2e/input-impact.spec.ts adds the UI layer: one test per Plan-tab card drives re
 inputs and asserts a cheap deterministic readout moves (plus the card's negative
 assertion); sub-rounding effects (cost basis, cash return) are unit-harness-only —
 asserting them through $M-rounded readouts would test display rounding, not wiring.
+
+## D30. Mobile is the same app, adapted with CSS only (Phase 9)
+The 375px experience is produced entirely by responsive classes and media queries --
+no separate components, no forked logic, no user-agent sniffing, and no change to any
+number the engine produces. The three audit-driven rules: (1) the type->verdict loop
+must survive every viewport, so metric chips are shrink-0 on phones (flexbox was
+crushing them to 0px wide) and a compact FI/success line rides the sticky nav while
+the two-row header stays static (sticky chrome fell from 178px to ~70px); (2) every
+control is finger-sized on phones and pixel-identical on desktop -- 16px input font
+kills iOS focus-zoom (text-base sm:text-sm), hit boxes reach the 32-40px floor via
+mobile-only padding reset at sm:, and coarse-pointer media queries grow the slider
+thumbs; (3) wide content adapts inside its container -- multi-column rows stack 2-up,
+tables pin their first column (sticky left-0) so a dollar never loses its row label,
+and the nav strip fades at the edge plus scrolls the active tab into view because iOS
+hides scrollbars. Timeline milestone rows double as tappable cross-links with names
+distinct from the SVG markers (identical accessible names would be a strict-mode
+ambiguity). e2e/mobile.spec.ts pins all of it at a 375x812 hasTouch viewport in the
+same chromium project (test.use viewport override, not a second Playwright project).
+The touch-floor test caught two of this phase's own bugs before commit -- 25.7px
+arrows and a stale scroller locator -- which is the audit loop working as designed.

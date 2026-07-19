@@ -41,6 +41,7 @@ test story — the app is always shippable between phases.
 | 6 | Scenario workflow | F15 F17 F19 F25 | ~4h | No (store only) |
 | 7 | Charts, tables & cross-navigation | F10 F20 F21 F22 F26 F29 | ~6h | MC failure ages |
 | 8 | Contribution schedules & input efficacy | post-audit | ~8h | Age-varying contributions |
+| 9 | Mobile experience (P0/P1/P2 audit fixes) | mobile audit | ~4h | No (CSS + e2e only) |
 
 Total ≈ 4–5 working days. All 30 audit findings are covered; the three explicitly deferred
 ideas are listed at the end.
@@ -486,6 +487,37 @@ classification enforced by the sensitivity harness).
 
 **Exit gate:** standard (unit + build + e2e green, one commit per sub-phase or one for
 both, push, live-verify in browser).
+
+---
+
+## Phase 9 — Mobile experience *(mobile-UX audit, user-requested)*
+
+A 375×812 audit of the live app found the responsive skeleton sound (no horizontal
+overflow, numeric keypads wired, cards stack) but the core loop broken on phones.
+Three prioritized sub-phases, each implemented → tested → committed → CI-verified
+before the next; all CSS-level, desktop pixel-identical, engine untouched (D30).
+
+**9a — P0 (commit 5641877):** header verdict chips were flex-crushed to 0px wide →
+`shrink-0` + own scrollable row; income rows squeezed 7 columns into 375px (9px
+inputs) → stack 2-up under `sm:`; 14px inputs triggered iOS focus-zoom → 16px on
+mobile; Timeline/Cash Flow tabs sat off-screen with no affordance → edge fade +
+active-tab `scrollIntoView`; static mobile header with the nav sticky at top-0.
+
+**9b — P1 (commit 75e6bc0):** compact FI/success verdict rides the sticky nav bar
+(`sm:hidden`); Projection and Compare tables pin their first column; milestone
+detail rows become tappable cross-links (distinct accessible names from the SVG
+markers); touch-size floor — Btn/ghost `min-h-10`, segmented `min-h-9`, 32px padded
+hit boxes on ⓘ, wider reorder arrows. Sub-32px controls: 73 → 8.
+
+**9c — P2:** coarse-pointer media query grows slider thumbs to 22px on a 28px hit
+area; table cells 13px on phones; spending-lever slider step 5k → 1k so the range
+input can represent the exact plan value instead of snapping ($72,000 showed as
+$70,000).
+
+**Tests:** `e2e/mobile.spec.ts` — 12 tests at a 375×812 `hasTouch` viewport in the
+same chromium project. **DECISIONS.md:** D30.
+
+**Exit gate:** standard, per sub-phase.
 
 ---
 

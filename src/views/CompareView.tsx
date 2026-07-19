@@ -199,7 +199,7 @@ export function CompareView() {
 
       <Card title="Side by side" subtitle="Deterministic FI metrics + Monte Carlo success per scenario">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-right text-xs tabular-nums">
+          <table className="w-full min-w-[760px] text-right text-[13px] tabular-nums sm:text-xs">
             <thead>
               <tr className="border-b border-[var(--c-border)] text-[10px] uppercase tracking-wide text-[var(--c-muted)]">
                 <th className="sticky left-0 z-[2] bg-[var(--c-surface)] py-2 text-left font-medium">Scenario</th>

@@ -27,7 +27,7 @@ export function ProjectionView() {
 
       <Card title="Year by year" subtitle="Every simulated year — income, taxes, flows, balances (today's $). Click a row for that year's cash flow.">
         <div className="max-h-[420px] overflow-auto">
-          <table className="w-full min-w-[860px] border-collapse text-right text-xs tabular-nums">
+          <table className="w-full min-w-[860px] border-collapse text-right text-[13px] tabular-nums sm:text-xs">
             <thead className="sticky top-0 bg-[var(--c-surface)]">
               <tr className="border-b border-[var(--c-border)] text-[10px] uppercase tracking-wide text-[var(--c-muted)]">
                 {/* Sticky first column: 64% of this table is off-screen on phones, and

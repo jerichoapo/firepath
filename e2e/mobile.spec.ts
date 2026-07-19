@@ -109,3 +109,34 @@ test('mobile: milestone table rows are the phone-sized path to cash flow', async
   await page.getByRole('button', { name: 'Kid starts college — cash flow at age 53' }).click();
   await expect(page.getByText(/Age 53 · \d{4}/)).toBeVisible();
 });
+
+// ---------------------------------------------------------------------------
+// P2: touch slider thumbs, table legibility, honest lever display.
+
+test('mobile: sliders grow a finger-sized thumb on coarse pointers', async ({ seedApp: page }) => {
+  // hasTouch makes Chromium report a coarse pointer, which scopes the thumb CSS.
+  expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(true);
+  const slider = page.getByLabel('Retire at age slider');
+  const box = await slider.boundingBox();
+  expect(box!.height).toBeGreaterThanOrEqual(24);
+  const thumbH = await slider.evaluate(
+    (el) => getComputedStyle(el, '::-webkit-slider-thumb').height,
+  );
+  expect(parseFloat(thumbH)).toBeGreaterThanOrEqual(20);
+});
+
+test('mobile: the spending lever shows the exact plan value, never a snapped one', async ({ seedApp: page }) => {
+  // At retire-age 45 the lever binds to current spending ($72k). With the old 5k
+  // slider step the range input snapped its position to $70k — a wrong-looking number.
+  await page.getByLabel('Retire at age', { exact: true }).fill('45');
+  await expect(page.getByLabel('Spending in retirement slider')).toHaveJSProperty('value', '72000');
+});
+
+test('mobile: projection table cells are 13px on phones', async ({ seedApp: page }) => {
+  await page.locator('nav').getByRole('button', { name: 'Projection', exact: true }).click();
+  const fontSize = await page
+    .locator('tbody td')
+    .first()
+    .evaluate((el) => getComputedStyle(el).fontSize);
+  expect(fontSize).toBe('13px');
+});

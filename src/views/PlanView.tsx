@@ -146,7 +146,9 @@ export function PlanView() {
             min={0}
             value={retirementSpend}
             onChange={setRetirementSpend}
-            slider={[0, 300_000, 5_000]}
+            // 1k step, not 5k: a range input snaps its value to the step grid, so the
+            // demo's $72,000 displayed as $70,000 on the slider — a wrong-looking number.
+            slider={[0, 300_000, 1_000]}
             help="The spending level in force at your retirement age — the FI number is this × your FI multiplier. Edits the spending phase that covers retirement, or current spending if none does."
           />
           <NumField
