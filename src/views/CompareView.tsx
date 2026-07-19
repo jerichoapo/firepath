@@ -202,7 +202,7 @@ export function CompareView() {
           <table className="w-full min-w-[760px] text-right text-xs tabular-nums">
             <thead>
               <tr className="border-b border-[var(--c-border)] text-[10px] uppercase tracking-wide text-[var(--c-muted)]">
-                <th className="py-2 text-left font-medium">Scenario</th>
+                <th className="sticky left-0 z-[2] bg-[var(--c-surface)] py-2 text-left font-medium">Scenario</th>
                 <th className="font-medium">FI number</th>
                 <th className="font-medium">FI age</th>
                 <th className="font-medium">Coast age</th>
@@ -214,7 +214,8 @@ export function CompareView() {
             <tbody>
               {rows.map(({ scenario: s, ...r }) => (
                 <tr key={s.id} className={`border-b border-[var(--c-grid)]/60 ${s.id === store.active.id ? 'bg-[var(--c-accent)]/5' : ''}`}>
-                  <td className="py-2 text-left font-medium">
+                  {/* Sticky like the projection table — scenario numbers need their name in view. */}
+                  <td className="sticky left-0 z-[1] bg-[var(--c-surface)] py-2 text-left font-medium">
                     <span className="mr-1.5 inline-block h-2 w-2 rounded-full" style={{ background: s.color }} />
                     {s.name}
                   </td>

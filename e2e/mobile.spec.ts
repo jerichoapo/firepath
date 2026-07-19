@@ -35,7 +35,7 @@ test('mobile: income and account fields are wide enough to read and type in', as
 });
 
 test('mobile: every tab is reachable and the active tab scrolls into view', async ({ seedApp: page }) => {
-  const scroller = page.locator('nav > div').first();
+  const scroller = page.getByTestId('nav-tabs');
   // The strip genuinely overflows at 375px…
   const overflow = await scroller.evaluate((el) => el.scrollWidth - el.clientWidth);
   expect(overflow).toBeGreaterThan(50);
@@ -53,4 +53,59 @@ test('mobile: the page never scrolls horizontally on the Plan tab', async ({ see
     () => document.documentElement.scrollWidth - window.innerWidth,
   );
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+// ---------------------------------------------------------------------------
+// P1: slim sticky chrome, sticky table columns, finger-sized targets.
+
+test('mobile: a compact verdict rides the sticky bar and survives scrolling', async ({ seedApp: page }) => {
+  const verdict = page.getByTestId('mobile-verdict');
+  await expect(verdict).toContainText('FI $2.0M');
+  await expect(verdict).toContainText('success');
+
+  // Scroll deep into the form — the verdict must still sit at the top of the screen.
+  await page.evaluate(() => window.scrollTo(0, 1500));
+  await expect(verdict).toBeVisible();
+  const box = await verdict.boundingBox();
+  expect(box!.y).toBeGreaterThanOrEqual(0);
+  expect(box!.y).toBeLessThan(10);
+});
+
+test('mobile: the projection table pins the Age column while the rest scrolls', async ({ seedApp: page }) => {
+  await page.locator('nav').getByRole('button', { name: 'Projection', exact: true }).click();
+  const firstCell = page.getByRole('button', { name: 'View cash flow at age 35' });
+  await expect(firstCell).toBeVisible();
+  const before = await firstCell.boundingBox();
+
+  // Scroll the table container far right; the age cell must not move.
+  await page.locator('table').first().evaluate((table) => {
+    table.parentElement!.scrollLeft = 500;
+  });
+  await expect.poll(() => page.locator('table').first().evaluate((t) => t.parentElement!.scrollLeft)).toBeGreaterThan(400);
+  const after = await firstCell.boundingBox();
+  expect(Math.abs(after!.x - before!.x)).toBeLessThan(2);
+});
+
+test('mobile: interactive controls meet the touch-size floor', async ({ seedApp: page }) => {
+  // ⓘ help buttons: 16px glyph, 32px hit area via padding.
+  const help = page.getByLabel('About Expected return', { exact: true }).first();
+  const helpBox = await help.boundingBox();
+  expect(helpBox!.width).toBeGreaterThanOrEqual(30);
+  expect(helpBox!.height).toBeGreaterThanOrEqual(30);
+
+  // Segmented toggles and ghost buttons stretch to a real row height.
+  expect((await page.getByRole('button', { name: 'Solo', exact: true }).boundingBox())!.height).toBeGreaterThanOrEqual(34);
+  expect((await page.getByRole('button', { name: 'Backup ▾' }).boundingBox())!.height).toBeGreaterThanOrEqual(38);
+
+  // Withdrawal-order arrows were 14×16 — the least tappable controls in the app.
+  const arrow = page.getByLabel('Move Taxable brokerage earlier');
+  const arrowBox = await arrow.boundingBox();
+  expect(arrowBox!.width).toBeGreaterThanOrEqual(28);
+  expect(arrowBox!.height).toBeGreaterThanOrEqual(28);
+});
+
+test('mobile: milestone table rows are the phone-sized path to cash flow', async ({ seedApp: page }) => {
+  await page.locator('nav').getByRole('button', { name: 'Timeline', exact: true }).click();
+  await page.getByRole('button', { name: 'Kid starts college — cash flow at age 53' }).click();
+  await expect(page.getByText(/Age 53 · \d{4}/)).toBeVisible();
 });

@@ -9,7 +9,7 @@ import { usePlanStore } from '../store/PlanContext';
 import { useSim } from '../store/SimContext';
 import { Confirm, useToast } from './ui';
 
-const ghostBtn = 'rounded-lg border border-[var(--c-border)] px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--c-grid)]/40';
+const ghostBtn = 'min-h-10 rounded-lg border border-[var(--c-border)] px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--c-grid)]/40 sm:min-h-0';
 const menuItemCls = 'block w-full rounded-lg px-2.5 py-1.5 text-left text-xs hover:bg-[var(--c-grid)]/40';
 
 function Metric({ label, value, tone, title, computing }: {

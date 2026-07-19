@@ -30,7 +30,9 @@ export function ProjectionView() {
           <table className="w-full min-w-[860px] border-collapse text-right text-xs tabular-nums">
             <thead className="sticky top-0 bg-[var(--c-surface)]">
               <tr className="border-b border-[var(--c-border)] text-[10px] uppercase tracking-wide text-[var(--c-muted)]">
-                <th className="py-2 pr-3 text-left font-medium">Age · Year</th>
+                {/* Sticky first column: 64% of this table is off-screen on phones, and
+                    a net-worth figure is meaningless without its year in view. */}
+                <th className="sticky left-0 z-[2] bg-[var(--c-surface)] py-2 pr-3 text-left font-medium">Age · Year</th>
                 <th className="px-2 font-medium">Income</th>
                 <th className="px-2 font-medium">Taxes</th>
                 <th className="px-2 font-medium">Spending</th>
@@ -50,7 +52,7 @@ export function ProjectionView() {
                     onClick={() => goToCashFlow(r.age)}
                     className={`cursor-pointer border-b border-[var(--c-grid)]/60 hover:bg-[var(--c-grid)]/30 ${r.failed ? 'text-[var(--c-bad)]' : ''}`}
                   >
-                    <td className="py-1.5 pr-3 text-left font-medium">
+                    <td className="sticky left-0 z-[1] bg-[var(--c-surface)] py-1.5 pr-3 text-left font-medium">
                       {/* Keyboard path for the row's cross-link (the row click is mouse-only). */}
                       <button
                         type="button"

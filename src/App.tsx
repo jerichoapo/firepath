@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { Header } from './components/Header';
 import { Btn, ToastProvider } from './components/ui';
+import { fmtCompact, fmtPct } from './lib/format';
 import { loadStore, type StoreState } from './store/db';
 import { NavProvider, useNav, type TabId } from './store/NavContext';
 import { PlanProvider, usePlanStore } from './store/PlanContext';
-import { SimProvider } from './store/SimContext';
+import { SimProvider, useSim } from './store/SimContext';
 import { BacktestView } from './views/BacktestView';
 import { CompareView } from './views/CompareView';
 import { MonteCarloView } from './views/MonteCarloView';
@@ -62,30 +63,33 @@ function Shell() {
       <Header />
       {/* Mobile: the header above is static, so the nav pins to the very top. */}
       <nav className="sticky top-0 z-10 border-b border-[var(--c-border)] bg-[var(--c-page)]/95 backdrop-blur sm:top-[49px]">
-        <div ref={navScroll} className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setTab(t.id)}
-              aria-current={tab === t.id ? 'page' : undefined}
-              className={`whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-medium transition-colors ${
-                tab === t.id
-                  ? 'border-[var(--c-accent)] text-[var(--c-accent)]'
-                  : 'border-transparent text-[var(--c-ink-2)] hover:text-[var(--c-ink)]'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+        <MobileVerdict />
+        <div className="relative">
+          <div ref={navScroll} data-testid="nav-tabs" className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                aria-current={tab === t.id ? 'page' : undefined}
+                className={`whitespace-nowrap border-b-2 px-3 py-3 text-xs font-medium transition-colors sm:py-2.5 ${
+                  tab === t.id
+                    ? 'border-[var(--c-accent)] text-[var(--c-accent)]'
+                    : 'border-transparent text-[var(--c-ink-2)] hover:text-[var(--c-ink)]'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          {/* Off-screen tabs exist on phones; iOS hides scrollbars, so hint with a fade. */}
+          <div
+            aria-hidden="true"
+            data-testid="nav-fade"
+            className="pointer-events-none absolute inset-y-0 right-0 w-8 sm:hidden"
+            style={{ background: 'linear-gradient(to left, var(--c-page), transparent)' }}
+          />
         </div>
-        {/* Off-screen tabs exist on phones; iOS hides scrollbars, so hint with a fade. */}
-        <div
-          aria-hidden="true"
-          data-testid="nav-fade"
-          className="pointer-events-none absolute inset-y-0 right-0 w-8 sm:hidden"
-          style={{ background: 'linear-gradient(to left, var(--c-page), transparent)' }}
-        />
       </nav>
       <DemoBanner />
       <main className="mx-auto max-w-7xl px-4 py-4">
@@ -95,6 +99,32 @@ function Shell() {
         FirePath is a local-only educational modeling tool, not financial advice. All data stays in your browser.
       </footer>
     </>
+  );
+}
+
+/** One-line verdict riding the mobile sticky bar (P1): the header's full metric strip
+ *  is static on phones and scrolls away, but the type→verdict loop must survive that.
+ *  Hidden from sm up, where the sticky header already keeps the metrics on screen. */
+function MobileVerdict() {
+  const sim = useSim();
+  if (sim.incomplete) return null;
+  return (
+    <div
+      data-testid="mobile-verdict"
+      className="flex items-center gap-4 overflow-x-auto border-b border-[var(--c-border)]/60 px-4 py-1.5 text-[11px] tabular-nums text-[var(--c-ink-2)] sm:hidden"
+    >
+      <span className="whitespace-nowrap">
+        FI <b className="text-[var(--c-ink)]">{fmtCompact(sim.fiN)}</b>
+      </span>
+      <span className="whitespace-nowrap">
+        {sim.fiAgeVal != null
+          ? <>reached <b className="text-[var(--c-ink)]">@ {sim.fiAgeVal}</b></>
+          : <b className="text-[var(--c-bad)]">not reached</b>}
+      </span>
+      <span className={`whitespace-nowrap transition-opacity ${sim.mcComputing ? 'opacity-50' : ''}`}>
+        <b className="text-[var(--c-ink)]">{sim.mc ? fmtPct(sim.mc.successRate) : '…'}</b> success
+      </span>
+    </div>
   );
 }
 

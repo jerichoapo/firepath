@@ -104,8 +104,25 @@ export function TimelineView() {
           </thead>
           <tbody>
             {milestones.map((m, i) => (
-              <tr key={`${m.name}-${i}`} className="border-b border-[var(--c-grid)]/60">
-                <td className="py-1.5">{m.emoji} {m.name}</td>
+              // Tappable rows are the phone-sized path to each year's cash flow — the SVG
+              // markers above shrink with the viewBox and get too small to hit on phones.
+              // The button's name differs from the marker's aria-label on purpose: two
+              // controls with identical accessible names would be a strict-mode ambiguity.
+              <tr
+                key={`${m.name}-${i}`}
+                onClick={() => goToCashFlow(m.age!)}
+                className="cursor-pointer border-b border-[var(--c-grid)]/60 hover:bg-[var(--c-grid)]/30"
+              >
+                <td className="py-2.5">
+                  <button
+                    type="button"
+                    aria-label={`${m.name} — cash flow at age ${m.age}`}
+                    className="rounded hover:text-[var(--c-accent)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--c-accent)]"
+                    onClick={() => goToCashFlow(m.age!)}
+                  >
+                    {m.emoji} {m.name}
+                  </button>
+                </td>
                 <td className="tabular-nums">{m.age}</td>
                 <td className="tabular-nums">{year(m.age!)}</td>
                 <td className="text-[var(--c-muted)]">{m.kind === 'user' ? 'You' : 'Computed'}</td>

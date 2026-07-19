@@ -221,7 +221,7 @@ export function PlanView() {
                         aria-label={`Vary ${ACCOUNT_LABELS[t]} contribution by age`}
                         aria-pressed={open}
                         title="Vary by age"
-                        className={`rounded-lg border px-1.5 py-1.5 text-xs transition-colors ${
+                        className={`rounded-lg border px-2.5 py-2 text-xs transition-colors sm:px-1.5 sm:py-1.5 ${
                           open || scheduled
                             ? 'border-[var(--c-accent)]/50 text-[var(--c-accent)]'
                             : 'border-[var(--c-border)] text-[var(--c-muted)] hover:text-[var(--c-ink)]'
@@ -464,14 +464,14 @@ export function PlanView() {
                       <button
                         type="button"
                         aria-label={`Move ${ACCOUNT_LABELS[t]} earlier`}
-                        className="rounded px-1 text-[var(--c-muted)] hover:bg-[var(--c-grid)]/40 hover:text-[var(--c-ink)] disabled:opacity-30 disabled:hover:bg-transparent"
+                        className="rounded px-3.5 py-2 text-[var(--c-muted)] hover:bg-[var(--c-grid)]/40 hover:text-[var(--c-ink)] disabled:opacity-30 disabled:hover:bg-transparent sm:px-1 sm:py-0"
                         disabled={i === 0}
                         onClick={() => moveWithdrawal(i, -1)}
                       >↑</button>
                       <button
                         type="button"
                         aria-label={`Move ${ACCOUNT_LABELS[t]} later`}
-                        className="rounded px-1 text-[var(--c-muted)] hover:bg-[var(--c-grid)]/40 hover:text-[var(--c-ink)] disabled:opacity-30 disabled:hover:bg-transparent"
+                        className="rounded px-3.5 py-2 text-[var(--c-muted)] hover:bg-[var(--c-grid)]/40 hover:text-[var(--c-ink)] disabled:opacity-30 disabled:hover:bg-transparent sm:px-1 sm:py-0"
                         disabled={i === plan.tax.withdrawalOrder.length - 1}
                         onClick={() => moveWithdrawal(i, 1)}
                       >↓</button>

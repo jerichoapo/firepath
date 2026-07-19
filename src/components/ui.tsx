@@ -37,7 +37,7 @@ export function Btn({ children, onClick, variant = 'ghost', title, disabled }: {
       title={title}
       disabled={disabled}
       onClick={onClick}
-      className={`rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-40 ${styles}`}
+      className={`min-h-10 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors disabled:opacity-40 sm:min-h-0 ${styles}`}
     >
       {children}
     </button>
@@ -79,7 +79,9 @@ export function Help({ text, label }: { text: string; label?: string }) {
         aria-describedby={open ? id : undefined}
         // preventDefault: inside a <label>, the click must not activate the labeled input.
         onClick={(e) => { e.preventDefault(); setOpen((v) => !v); }}
-        className="grid h-4 w-4 place-items-center rounded-full text-[11px] leading-none text-[var(--c-muted)] hover:text-[var(--c-accent)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--c-accent)]"
+        // box-content + p-2/-m-2: a 32px finger target on phones around the same 16px
+        // glyph, with zero layout shift (the negative margin swallows the padding).
+        className="-m-2 box-content grid h-4 w-4 place-items-center rounded-full p-2 text-[11px] leading-none text-[var(--c-muted)] hover:text-[var(--c-accent)] focus-visible:outline focus-visible:outline-1 focus-visible:outline-[var(--c-accent)] sm:m-0 sm:p-0"
       >
         ⓘ
       </button>
@@ -232,7 +234,7 @@ export function Segmented<T extends string>({ value, onChange, options, label }:
             key={o.value}
             type="button"
             onClick={() => onChange(o.value)}
-            className={`rounded-md px-2.5 py-1 font-medium transition-colors ${
+            className={`min-h-9 rounded-md px-2.5 py-1 font-medium transition-colors sm:min-h-0 ${
               value === o.value ? 'bg-[var(--c-accent)] text-white' : 'text-[var(--c-ink-2)] hover:bg-[var(--c-grid)]/40'
             }`}
           >
