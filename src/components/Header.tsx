@@ -19,7 +19,7 @@ function Metric({ label, value, tone, title, computing }: {
 }) {
   const color = tone === 'good' ? 'text-[var(--c-good)]' : tone === 'bad' ? 'text-[var(--c-bad)]' : '';
   return (
-    <div className="min-w-0" title={title}>
+    <div className="min-w-0 shrink-0 sm:shrink" title={title}>
       <p className="text-[10px] uppercase tracking-wide text-[var(--c-muted)]">{label}</p>
       <p
         data-computing={computing || undefined}
@@ -97,7 +97,9 @@ export function Header() {
     : 'Not reached';
 
   return (
-    <header className="sticky top-0 z-20 border-b border-[var(--c-border)] bg-[var(--c-surface)]/95 backdrop-blur">
+    // Sticky only from sm up: the mobile header is two rows tall, and pinning it would
+    // eat a quarter of the phone viewport (the nav below sticks on its own instead).
+    <header className="border-b border-[var(--c-border)] bg-[var(--c-surface)]/95 backdrop-blur sm:sticky sm:top-0 sm:z-20">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2.5">
         <div className="flex items-center gap-2">
           <img src="/flame.svg" alt="" className="h-6 w-6" />
@@ -106,7 +108,7 @@ export function Header() {
 
         <select
           aria-label="Active scenario"
-          className="max-w-44 rounded-lg border border-[var(--c-border)] bg-[var(--c-page)] px-2 py-1.5 text-xs font-medium outline-none"
+          className="max-w-44 rounded-lg border border-[var(--c-border)] bg-[var(--c-page)] px-2 py-1.5 text-base font-medium outline-none sm:text-xs"
           value={store.active.id}
           onChange={(e) => store.dispatch({ type: 'select', id: e.target.value })}
         >
@@ -115,7 +117,9 @@ export function Header() {
           ))}
         </select>
 
-        <div className="flex flex-1 items-center gap-5 overflow-x-auto">
+        {/* Mobile: the metric strip takes its own full-width row and scrolls sideways —
+            without shrink-0 chips + order-last, flexbox crushes every verdict to 0px. */}
+        <div className="order-last flex w-full items-center gap-4 overflow-x-auto sm:order-none sm:w-auto sm:flex-1 sm:gap-5">
           <Metric label="Net worth today" value={fmtCompact(sim.netWorthNow)} />
           <Metric label="FI number" value={dash ? '—' : fmtCompact(sim.fiN)} />
           <Metric label="Projected FI" value={dash ? '—' : fiLabel} tone={!dash && sim.fiAgeVal != null ? 'good' : !dash ? 'bad' : undefined} />

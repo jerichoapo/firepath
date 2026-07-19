@@ -196,8 +196,8 @@ export function PlanView() {
 
         <Card title="Accounts" subtitle="Balances today + planned annual contributions">
           <div className="grid gap-2">
-            <div className="grid grid-cols-[1.2fr_1fr_1.3fr] gap-2 text-[10px] uppercase tracking-wide text-[var(--c-muted)]">
-              <span /><span>Balance</span><span>Contribution / yr</span>
+            <div className="grid grid-cols-2 gap-2 text-[10px] uppercase tracking-wide text-[var(--c-muted)] sm:grid-cols-[1.2fr_1fr_1.3fr]">
+              <span className="hidden sm:block" /><span>Balance</span><span>Contribution / yr</span>
             </div>
             {ACCOUNT_TYPES.map((t) => {
               const changes = plan.accounts[t].changes ?? [];
@@ -205,8 +205,9 @@ export function PlanView() {
               const scheduled = changes.length > 0;
               return (
                 <div key={t} className={open ? 'rounded-lg border border-[var(--c-border)] p-1.5' : ''}>
-                  <div className="grid grid-cols-[1.2fr_1fr_1.3fr] items-center gap-2">
-                    <span className="flex items-center gap-1.5 text-xs font-medium">
+                  {/* Mobile: the account name takes its own line; the two money fields share the row. */}
+                  <div className="grid grid-cols-2 items-center gap-2 sm:grid-cols-[1.2fr_1fr_1.3fr]">
+                    <span className="col-span-2 flex items-center gap-1.5 text-xs font-medium sm:col-span-1">
                       <span className="h-2.5 w-2.5 rounded-full" style={{ background: `var(--c-${t})` }} />
                       {ACCOUNT_LABELS[t]}
                     </span>
@@ -327,7 +328,7 @@ export function PlanView() {
             {plan.incomes.map((s) => (
               <div
                 key={s.id}
-                className={`${rowGrid} grid-cols-[1.6fr_0.9fr_1.1fr_0.7fr_0.7fr_0.8fr_auto] ${
+                className={`${rowGrid} grid-cols-2 sm:grid-cols-[1.6fr_0.9fr_1.1fr_0.7fr_0.7fr_0.8fr_auto] ${
                   badStreams.has(s.id) ? 'rounded-lg p-1.5 ring-1 ring-[var(--c-bad)]/60' : ''
                 }`}
               >
@@ -337,7 +338,9 @@ export function PlanView() {
                 <NumField label="From" value={s.startAge} onChange={(v) => income(s.id, { startAge: Math.round(v) })} />
                 <NumField label="To" value={s.endAge} onChange={(v) => income(s.id, { endAge: Math.round(v) })} help="Inclusive last age" />
                 <NumField label="Growth" suffix="%" percent value={s.growth} onChange={(growth) => income(s.id, { growth })} help="Real growth above inflation" />
-                <Btn variant="danger" title="Remove" onClick={() => patch('incomes', plan.incomes.filter((i) => i.id !== s.id))}>✕</Btn>
+                <div className="col-span-2 justify-self-end sm:col-span-1 sm:justify-self-auto">
+                  <Btn variant="danger" title="Remove" onClick={() => patch('incomes', plan.incomes.filter((i) => i.id !== s.id))}>✕</Btn>
+                </div>
               </div>
             ))}
           </div>
@@ -389,7 +392,7 @@ export function PlanView() {
           <div className="mt-2 grid gap-2">
             {plan.expenses.oneTimes.length === 0 && <Empty>Down payment, ADU build, college…</Empty>}
             {plan.expenses.oneTimes.map((o) => (
-              <div key={o.id} className={`${rowGrid} grid-cols-[1.6fr_0.8fr_1.2fr_auto]`}>
+              <div key={o.id} className={`${rowGrid} grid-cols-2 sm:grid-cols-[1.6fr_0.8fr_1.2fr_auto]`}>
                 <NumTextField label="Name" value={o.name} onChange={(name) => expenses({ oneTimes: plan.expenses.oneTimes.map((x) => (x.id === o.id ? { ...x, name } : x)) })} />
                 <NumField label="Age" value={o.age} onChange={(v) => expenses({ oneTimes: plan.expenses.oneTimes.map((x) => (x.id === o.id ? { ...x, age: Math.round(v) } : x)) })} />
                 <NumField label="Amount" prefix="$" value={o.amount} onChange={(v) => expenses({ oneTimes: plan.expenses.oneTimes.map((x) => (x.id === o.id ? { ...x, amount: v } : x)) })} help="Negative = windfall (inheritance, sale)" />
@@ -549,7 +552,7 @@ function NumTextField({ label, value, onChange }: { label: string; value: string
     <label className="block text-xs">
       <span className="mb-1 block text-[var(--c-ink-2)]">{label}</span>
       <input
-        className="w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-page)] px-2 py-1.5 text-sm outline-none focus:border-[var(--c-accent)]"
+        className="w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-page)] px-2 py-1.5 text-base outline-none focus:border-[var(--c-accent)] sm:text-sm"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />

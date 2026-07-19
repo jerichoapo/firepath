@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Header } from './components/Header';
 import { Btn, ToastProvider } from './components/ui';
 import { loadStore, type StoreState } from './store/db';
@@ -49,16 +49,26 @@ export default function App() {
 function Shell() {
   const { tab, setTab } = useNav();
   const View = TABS.find((t) => t.id === tab)!.view;
+  // On phones the tab strip scrolls; keep the active tab in view even when it was
+  // activated from elsewhere (a projection-row click can select the Cash Flow tab).
+  const navScroll = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    navScroll.current
+      ?.querySelector('[aria-current="page"]')
+      ?.scrollIntoView({ inline: 'nearest', block: 'nearest' });
+  }, [tab]);
   return (
     <>
       <Header />
-      <nav className="sticky top-[49px] z-10 border-b border-[var(--c-border)] bg-[var(--c-page)]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4">
+      {/* Mobile: the header above is static, so the nav pins to the very top. */}
+      <nav className="sticky top-0 z-10 border-b border-[var(--c-border)] bg-[var(--c-page)]/95 backdrop-blur sm:top-[49px]">
+        <div ref={navScroll} className="mx-auto flex max-w-7xl gap-1 overflow-x-auto px-4">
           {TABS.map((t) => (
             <button
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
+              aria-current={tab === t.id ? 'page' : undefined}
               className={`whitespace-nowrap border-b-2 px-3 py-2.5 text-xs font-medium transition-colors ${
                 tab === t.id
                   ? 'border-[var(--c-accent)] text-[var(--c-accent)]'
@@ -69,6 +79,13 @@ function Shell() {
             </button>
           ))}
         </div>
+        {/* Off-screen tabs exist on phones; iOS hides scrollbars, so hint with a fade. */}
+        <div
+          aria-hidden="true"
+          data-testid="nav-fade"
+          className="pointer-events-none absolute inset-y-0 right-0 w-8 sm:hidden"
+          style={{ background: 'linear-gradient(to left, var(--c-page), transparent)' }}
+        />
       </nav>
       <DemoBanner />
       <main className="mx-auto max-w-7xl px-4 py-4">

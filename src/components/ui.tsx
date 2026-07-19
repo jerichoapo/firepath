@@ -172,7 +172,7 @@ export function NumField({ label, value, onChange, min, max, step, prefix, suffi
           ref={inputRef}
           id={id}
           aria-label={ariaLabel ?? (label || undefined)}
-          className="w-full min-w-0 bg-transparent py-1.5 text-sm outline-none"
+          className="w-full min-w-0 bg-transparent py-1.5 text-base outline-none sm:text-sm"
           inputMode="decimal"
           value={focused ? text : atRest}
           min={min}
@@ -208,7 +208,7 @@ export function Select<T extends string>({ label, value, onChange, options }: {
     <label className="block text-xs">
       {label && <span className="mb-1 block text-[var(--c-ink-2)]">{label}</span>}
       <select
-        className="w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-page)] px-2 py-1.5 text-sm outline-none focus:border-[var(--c-accent)]"
+        className="w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-page)] px-2 py-1.5 text-base outline-none focus:border-[var(--c-accent)] sm:text-sm"
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
       >
@@ -364,7 +364,7 @@ export function Confirm({ title, body, confirmLabel = 'Confirm', typeWord, onCon
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && armed) confirm(); }}
-              className="mt-2 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-page)] px-2 py-1.5 text-xs uppercase tracking-wide outline-none focus:border-[var(--c-accent)]"
+              className="mt-2 w-full rounded-lg border border-[var(--c-border)] bg-[var(--c-page)] px-2 py-1.5 text-base uppercase tracking-wide outline-none focus:border-[var(--c-accent)] sm:text-xs"
             />
           )}
           <div className="mt-2.5 flex justify-end gap-1.5">
