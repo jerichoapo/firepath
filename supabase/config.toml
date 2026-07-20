@@ -1,0 +1,5 @@
+project_id = "zvrngbqluqbtkshivopk"
+
+[auth]
+site_url = "https://firepath-one.vercel.app"
+additional_redirect_urls = ["http://localhost:5173", "http://127.0.0.1:5173"]

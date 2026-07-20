@@ -1,13 +1,59 @@
 // Always-visible summary bar: scenario switcher, headline metrics, theme, export/import.
 
-import { useEffect, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { blankPlan } from '../engine/seed';
 import { makeScenario } from '../engine/seed';
 import { fmtCompact, fmtPct } from '../lib/format';
+import { cloudEnabled, getCloudState, subscribeCloud } from '../store/cloud';
 import { useNav } from '../store/NavContext';
 import { usePlanStore } from '../store/PlanContext';
 import { useSim } from '../store/SimContext';
 import { Confirm, useToast } from './ui';
+
+// The account modal (and the supabase-js it pulls in) loads only when opened.
+const CloudPanel = lazy(() => import('./CloudPanel'));
+
+/** ☁ button with a live status dot; hidden entirely when no cloud is configured. */
+function CloudButton({ className }: { className: string }) {
+  const cloud = useSyncExternalStore(subscribeCloud, getCloudState);
+  const [open, setOpen] = useState(false);
+  const dot =
+    cloud.phase === 'synced' ? 'bg-[var(--c-good)]'
+    : cloud.phase === 'syncing' || cloud.phase === 'connecting' ? 'animate-pulse bg-[var(--c-accent)]'
+    : cloud.phase === 'error' || cloud.phase === 'conflict' ? 'bg-[var(--c-bad)]'
+    : 'bg-[var(--c-muted)]/40';
+  const hint =
+    cloud.phase === 'signedOut' ? 'Cloud sync — sign in'
+    : cloud.phase === 'conflict' ? 'Cloud sync — action needed'
+    : cloud.phase === 'error' ? `Cloud sync — ${cloud.error ?? 'error'}`
+    : `Cloud sync — ${cloud.phase}`;
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-haspopup="dialog"
+        aria-label={hint}
+        title={hint}
+        data-testid="cloud-btn"
+        className={`${className} relative`}
+      >
+        ☁
+        <span
+          aria-hidden="true"
+          data-testid="cloud-dot"
+          data-phase={cloud.phase}
+          className={`absolute right-1 top-1 h-1.5 w-1.5 rounded-full ${dot}`}
+        />
+      </button>
+      {open && (
+        <Suspense fallback={null}>
+          <CloudPanel onClose={() => setOpen(false)} />
+        </Suspense>
+      )}
+    </>
+  );
+}
 
 const ghostBtn = 'min-h-10 rounded-lg border border-[var(--c-border)] px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-[var(--c-grid)]/40 sm:min-h-0';
 const menuItemCls = 'block w-full rounded-lg px-2.5 py-1.5 text-left text-xs hover:bg-[var(--c-grid)]/40';
@@ -164,6 +210,7 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-1.5">
+          {cloudEnabled && <CloudButton className={ghostBtn} />}
           <button
             type="button"
             onClick={toggleTheme}

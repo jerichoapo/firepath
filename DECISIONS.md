@@ -318,3 +318,19 @@ ambiguity). e2e/mobile.spec.ts pins all of it at a 375x812 hasTouch viewport in 
 same chromium project (test.use viewport override, not a second Playwright project).
 The touch-floor test caught two of this phase's own bugs before commit -- 25.7px
 arrows and a stale scroller locator -- which is the audit loop working as designed.
+
+## D31. Cloud sync rides on local-first, not the other way around (Phase 10)
+Accounts are optional Supabase email+password auth; the cloud stores ONE row per user
+(plans: user_id -> jsonb) holding the exact D27 export envelope, so parseExport
+validates every byte that comes back down and an invalid cloud copy is refused rather
+than applied. IndexedDB stays the working copy -- the app never waits on the network,
+and signed-out users ship none of supabase-js (dynamic import, own chunk). Sync is
+whole-document by design: push when only this device changed, pull when only the
+cloud changed, and an explicit user prompt when both changed -- plans are
+single-author documents, and a field-level merge would invent states nobody wrote.
+The decision function is pure and unit-tested; state comparison uses a sorted-key
+canonical hash because Postgres jsonb re-orders object keys (raw-text hashing made
+every pull look like a change). Authorization is entirely row-level security with the
+public publishable key in the bundle -- there is no API layer to maintain. Schema and
+auth config are committed (supabase/migrations, supabase/config.toml) and applied via
+CLI push, so the backend is reproducible from the repo.

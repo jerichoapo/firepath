@@ -42,6 +42,7 @@ test story — the app is always shippable between phases.
 | 7 | Charts, tables & cross-navigation | F10 F20 F21 F22 F26 F29 | ~6h | MC failure ages |
 | 8 | Contribution schedules & input efficacy | post-audit | ~8h | Age-varying contributions |
 | 9 | Mobile experience (P0/P1/P2 audit fixes) | mobile audit | ~4h | No (CSS + e2e only) |
+| 10 | Cloud accounts + sync (Supabase) | user request | ~5h | No (engine untouched) |
 
 Total ≈ 4–5 working days. All 30 audit findings are covered; the three explicitly deferred
 ideas are listed at the end.
@@ -518,6 +519,29 @@ $70,000).
 same chromium project. **DECISIONS.md:** D30.
 
 **Exit gate:** standard, per sub-phase.
+
+---
+
+## Phase 10 — Cloud accounts + sync (Supabase)
+
+Optional email+password accounts that back up and sync the whole store, layered on
+top of local-first IndexedDB (D31). Supabase project `zvrngbqluqbtkshivopk`
+(us-west-1, free tier), provisioned via the CLI; schema + auth config live in the
+repo (`supabase/migrations/0001_plans.sql`, `supabase/config.toml`).
+
+**Deliverables:** `src/store/cloud.ts` (lazy supabase-js client, pure `decideSync`
+push/pull/conflict logic, canonical `contentHash` over jsonb key re-ordering, status
+store), `CloudBoot` (bridge + change notifications), `CloudPanel` (lazy modal: auth,
+status, conflict resolution), ☁ header button with live status dot, `plans` table
+with per-user RLS policies. The cloud document IS the D27 export envelope, so
+`parseExport` validates every pull; an invalid cloud copy is refused, never applied.
+
+**Tests:** 9 unit tests (decision matrix, hash canonicalization); `e2e/cloud.spec.ts`
+with all Supabase traffic aborted at the network layer — the panel works and the app
+stays fully usable with zero cloud connectivity; live-verified against the real
+backend (auth error surfacing, REST + RLS probe).
+
+**Exit gate:** standard; signed-out visitors download none of supabase-js (own chunk).
 
 ---
 

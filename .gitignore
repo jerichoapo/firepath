@@ -7,3 +7,5 @@ playwright-report
 
 .vercel
 .env*
+# Supabase CLI link cache (config.toml + migrations ARE committed)
+supabase/.temp

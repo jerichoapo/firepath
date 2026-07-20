@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Header } from './components/Header';
 import { Btn, ToastProvider } from './components/ui';
 import { fmtCompact, fmtPct } from './lib/format';
+import { CloudBoot } from './store/CloudBoot';
 import { loadStore, type StoreState } from './store/db';
 import { NavProvider, useNav, type TabId } from './store/NavContext';
 import { PlanProvider, usePlanStore } from './store/PlanContext';
@@ -39,6 +40,7 @@ export default function App() {
       <SimProvider>
         <NavProvider>
           <ToastProvider>
+            <CloudBoot />
             <Shell />
           </ToastProvider>
         </NavProvider>
